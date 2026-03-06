@@ -160,7 +160,7 @@ local grm = getrawmetatable(game)
 local oldindex = grm.__index
 setreadonly(grm, false)
 
-grm.__index = LPH_NO_VIRTUALIZE(function(self, key)
+grm.__index = newcclosure(function(self, key)
     if not checkcaller() and self == mouse then
         if key == "Hit" then
             if not should_silent_aim_be_active() then
