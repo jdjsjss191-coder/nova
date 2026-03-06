@@ -1,0 +1,248 @@
+local cfg = shared.Nova or require(script.Parent.config)
+local players = game:GetService("Players")
+local uis = game:GetService("UserInputService")
+local runservice = game:GetService("RunService")
+local workspace = game:GetService("Workspace")
+local camera = workspace.CurrentCamera
+local localplayer = players.LocalPlayer
+local mouse = localplayer:GetMouse()
+
+local silent_aim_locked = false
+local silent_aim_key_was_pressed = false
+local cached_target = nil
+local is_silent_ready = false
+local silent_part_pos = Vector2.new(0, 0)
+
+local function get_effective_fov()
+    if not cfg['gun_based_fov'] then
+        return cfg['fov']
+    end
+    
+    local char = localplayer.Character
+    if not char then return cfg['fov'] end
+    
+    local tool = char:FindFirstChildOfClass("Tool")
+    if not tool then return cfg['fov'] end
+    
+    local tool_name = tool.Name:lower()
+    
+    if tool_name:find("double%-barrel") or tool_name:find("double barrel") or tool_name:find("doublebarrel") then
+        return cfg['fov_double_barrel']
+    elseif tool_name:find("tacticalshotgun") or tool_name:find("tactical shotgun") then
+        return cfg['fov_tactical_shotgun']
+    elseif tool_name:find("revolver") then
+        return cfg['fov_revolver']
+    end
+    
+    return cfg['fov']
+end
+
+local function get_target_part(player)
+    if not player.Character then return nil end
+    
+    if cfg['aim_part'] == 0 then
+        return player.Character:FindFirstChild("Head")
+    elseif cfg['aim_part'] == 1 then
+        local upper = player.Character:FindFirstChild("UpperTorso")
+        if upper then return upper end
+        return player.Character:FindFirstChild("Torso")
+    end
+    
+    return nil
+end
+
+local function is_player_knocked(player)
+    if not cfg['knocked_check'] then return false end
+    if not player.Character then return false end
+    
+    local body_effects = player.Character:FindFirstChild("BodyEffects")
+    if not body_effects then return false end
+    
+    local ko = body_effects:FindFirstChild("K.O")
+    if ko and ko.Value == true then return true end
+    
+    local knocked = body_effects:FindFirstChild("Knocked")
+    if knocked and knocked.Value == true then return true end
+    
+    return false
+end
+
+local function is_target_within_fov(player)
+    if not player.Character then return false end
+    
+    local mouse_location = uis:GetMouseLocation()
+    local target_part = get_target_part(player)
+    
+    if not target_part then return false end
+    
+    local part_screen, on_screen = camera:WorldToViewportPoint(target_part.Position)
+    if not on_screen then return false end
+    
+    local distance_from_cursor = math.sqrt(
+        (part_screen.X - mouse_location.X)^2 +
+        (part_screen.Y - mouse_location.Y)^2
+    )
+    
+    return distance_from_cursor <= get_effective_fov()
+end
+
+local function get_closest_player_from_cursor()
+    local mouse_location = uis:GetMouseLocation()
+    local closest_player = nil
+    local shortest_distance = math.huge
+    
+    for _, player in pairs(players:GetPlayers()) do
+        if player == localplayer then continue end
+        if not player.Character then continue end
+        
+        local target_part = get_target_part(player)
+        if not target_part then continue end
+        
+        local part_screen, on_screen = camera:WorldToViewportPoint(target_part.Position)
+        if not on_screen then continue end
+        
+        local distance_from_cursor = math.sqrt(
+            (part_screen.X - mouse_location.X)^2 +
+            (part_screen.Y - mouse_location.Y)^2
+        )
+        
+        if cfg['use_fov'] and distance_from_cursor > get_effective_fov() then
+            continue
+        end
+        
+        if cfg['knocked_check'] and is_player_knocked(player) then
+            continue
+        end
+        
+        if distance_from_cursor < shortest_distance then
+            shortest_distance = distance_from_cursor
+            closest_player = player
+        end
+    end
+    
+    return closest_player
+end
+
+local function should_silent_aim_be_active()
+    if not cfg['enabled'] then return false end
+    return silent_aim_locked
+end
+
+local function update_silent_aim_key_state()
+    local key_code = Enum.KeyCode[cfg['key']]
+    if not key_code then return end
+    
+    local is_pressed = uis:IsKeyDown(key_code)
+    
+    if cfg['mode'] == 'Toggle' then
+        if is_pressed and not silent_aim_key_was_pressed then
+            silent_aim_locked = not silent_aim_locked
+        end
+        
+        if not silent_aim_locked then
+            cached_target = nil
+            is_silent_ready = false
+        end
+    else
+        if is_pressed then
+            silent_aim_locked = true
+        else
+            silent_aim_locked = false
+            cached_target = nil
+            is_silent_ready = false
+        end
+    end
+    
+    silent_aim_key_was_pressed = is_pressed
+end
+
+local grm = getrawmetatable(game)
+local oldindex = grm.__index
+setreadonly(grm, false)
+
+grm.__index = LPH_NO_VIRTUALIZE(function(self, key)
+    if not checkcaller() and self == mouse then
+        if key == "Hit" then
+            if not should_silent_aim_be_active() then
+                return oldindex(self, key)
+            end
+            
+            if not cached_target then
+                return oldindex(self, key)
+            end
+            
+            if not cached_target.Character then
+                return oldindex(self, key)
+            end
+            
+            if is_player_knocked(cached_target) then
+                return oldindex(self, key)
+            end
+            
+            local target_part = get_target_part(cached_target)
+            if target_part then
+                return CFrame.new(target_part.Position)
+            end
+        end
+    end
+    return oldindex(self, key)
+end)
+
+runservice.RenderStepped:Connect(function()
+    update_silent_aim_key_state()
+    
+    if not should_silent_aim_be_active() then
+        is_silent_ready = false
+        cached_target = nil
+        return
+    end
+    
+    if not cached_target or not cached_target.Character then
+        local target = get_closest_player_from_cursor()
+        cached_target = target
+        
+        local target_part = get_target_part(target)
+        if target_part then
+            is_silent_ready = true
+        else
+            is_silent_ready = false
+        end
+    else
+        if not cfg['sticky_aim'] then
+            local target = get_closest_player_from_cursor()
+            cached_target = target
+        else
+            if cfg['use_fov'] then
+                if not is_target_within_fov(cached_target) then
+                    cached_target = nil
+                    is_silent_ready = false
+                    return
+                end
+            end
+        end
+    end
+    
+    if cached_target and cached_target.Character then
+        if cfg['knocked_check'] and is_player_knocked(cached_target) then
+            cached_target = nil
+            is_silent_ready = false
+            return
+        end
+        
+        local target_part = get_target_part(cached_target)
+        if target_part then
+            local part_screen, on_screen = camera:WorldToViewportPoint(target_part.Position)
+            
+            if on_screen then
+                silent_part_pos = Vector2.new(part_screen.X, part_screen.Y)
+                is_silent_ready = true
+            else
+                is_silent_ready = false
+            end
+        else
+            is_silent_ready = false
+        end
+    else
+        is_silent_ready = false
+    end
+end)
