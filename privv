@@ -249,3 +249,135 @@ end)
 
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/jdjsjss191-coder/nova/refs/heads/main/privv"))()
+
+
+-- ============================================================================
+-- ESP SYSTEM
+-- ============================================================================
+local esp_labels = {}
+
+local function add_esp(player)
+    if player == localplayer then return end
+    if not cfg['esp_enabled'] then return end
+    
+    local esp = {
+        player = player,
+        nametag = Drawing.new("Text"),
+    }
+    
+    esp.nametag.Size = 18
+    esp.nametag.Center = true
+    esp.nametag.Outline = true
+    esp.nametag.OutlineColor = Color3.fromRGB(0, 0, 0)
+    esp.nametag.Color = Color3.fromRGB(255, 255, 255)
+    esp.nametag.Font = 3
+    esp.nametag.Visible = false
+    esp.nametag.ZIndex = 1000
+    
+    esp_labels[player.UserId] = esp
+end
+
+local function remove_esp(player)
+    local esp = esp_labels[player.UserId]
+    if esp then
+        esp.nametag:Remove()
+        esp_labels[player.UserId] = nil
+    end
+end
+
+local function refresh_esp()
+    if not cfg['esp_enabled'] then
+        for userid, esp in pairs(esp_labels) do
+            esp.nametag:Remove()
+            esp_labels[userid] = nil
+        end
+        return
+    end
+    
+    for userid, esp in pairs(esp_labels) do
+        local player = esp.player
+        if not player or not player.Parent then
+            esp.nametag.Visible = false
+            esp.nametag:Remove()
+            esp_labels[userid] = nil
+            continue
+        end
+        
+        if player.Character and player.Character.Parent and 
+           player.Character:FindFirstChild("HumanoidRootPart") and 
+           player.Character:FindFirstChild("Head") then
+            
+            local hum = player.Character:FindFirstChildOfClass("Humanoid")
+            if not hum or hum.Health <= 0 then
+                esp.nametag.Visible = false
+                continue
+            end
+            
+            local head = player.Character.Head
+            local hrp = player.Character.HumanoidRootPart
+            
+            local worldpos = head.Position + Vector3.new(0, 1.5, 0)
+            local esppos, onscreen = camera:WorldToViewportPoint(worldpos)
+            
+            if onscreen and esppos.Z > 0 then
+                esp.nametag.Position = Vector2.new(esppos.X, esppos.Y)
+                esp.nametag.Text = player.Name
+                
+                -- Turn red if this is the current target
+                if cached_target and cached_target == player then
+                    esp.nametag.Color = Color3.fromRGB(255, 0, 0)
+                else
+                    esp.nametag.Color = Color3.fromRGB(255, 255, 255)
+                end
+                
+                esp.nametag.Visible = true
+            else
+                esp.nametag.Visible = false
+            end
+        else
+            esp.nametag.Visible = false
+        end
+    end
+end
+
+-- Initialize ESP for existing players
+for _, player in pairs(players:GetPlayers()) do
+    if player ~= localplayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        add_esp(player)
+    end
+    
+    player.CharacterAdded:Connect(function(char)
+        remove_esp(player)
+        char:WaitForChild("HumanoidRootPart")
+        task.wait(0.1)
+        add_esp(player)
+    end)
+    
+    player.CharacterRemoving:Connect(function()
+        remove_esp(player)
+    end)
+end
+
+players.PlayerAdded:Connect(function(player)
+    if player ~= localplayer then
+        player.CharacterAdded:Connect(function(char)
+            remove_esp(player)
+            char:WaitForChild("HumanoidRootPart")
+            task.wait(0.1)
+            add_esp(player)
+        end)
+        
+        player.CharacterRemoving:Connect(function()
+            remove_esp(player)
+        end)
+    end
+end)
+
+players.PlayerRemoving:Connect(function(player)
+    remove_esp(player)
+end)
+
+-- Add ESP refresh to render loop
+runservice.RenderStepped:Connect(function()
+    refresh_esp()
+end)
