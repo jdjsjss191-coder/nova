@@ -265,6 +265,7 @@ local function RefreshESP()
     if not cfg['esp']['enabled'] then
         for userid, esp in pairs(ESPLabels) do
             pcall(function()
+                esp.nametag.Visible = false
                 esp.nametag:Remove()
             end)
             ESPLabels[userid] = nil
@@ -275,7 +276,8 @@ local function RefreshESP()
     for userid, esp in pairs(ESPLabels) do
         local player = esp.player
         
-        if not player or not player.Parent then
+        -- Check if player still exists in game
+        if not player or not player.Parent or not Players:FindFirstChild(player.Name) then
             pcall(function()
                 esp.nametag.Visible = false
                 esp.nametag:Remove()
@@ -284,6 +286,7 @@ local function RefreshESP()
             continue
         end
         
+        -- Check if character exists
         if not player.Character or not player.Character.Parent then
             esp.nametag.Visible = false
             continue
@@ -292,7 +295,8 @@ local function RefreshESP()
         local head = player.Character:FindFirstChild("Head")
         local hum = player.Character:FindFirstChildOfClass("Humanoid")
         
-        if not head or not hum or hum.Health <= 0 then
+        -- Hide ESP if dead or missing parts
+        if not head or not hum or hum.Health <= 0 or PlayerDead(player) then
             esp.nametag.Visible = false
             continue
         end
@@ -300,6 +304,7 @@ local function RefreshESP()
         local worldpos = head.Position + Vector3_new(0, 1.5, 0)
         local esppos, onscreen = Camera:WorldToViewportPoint(worldpos)
         
+        -- Only show if on screen and in front of camera
         if onscreen and esppos.Z > 0 then
             esp.nametag.Position = Vector2_new(esppos.X, esppos.Y)
             esp.nametag.Text = player.Name
@@ -321,6 +326,7 @@ local function RefreshESP()
             
             esp.nametag.Visible = true
         else
+            -- Immediately hide when off screen
             esp.nametag.Visible = false
         end
     end
@@ -335,8 +341,10 @@ end
 
 Players.PlayerAdded:Connect(function(player)
     if player ~= LocalPlayer then
+        AddESP(player)
         player.CharacterAdded:Connect(function(char)
-            task.wait(0.5)
+            task.wait(0.1)
+            RemoveESP(player)
             AddESP(player)
         end)
     end
@@ -345,6 +353,19 @@ end)
 Players.PlayerRemoving:Connect(function(player)
     RemoveESP(player)
 end)
+
+-- Clean up ESP when character dies/respawns
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer and player.Character then
+        local hum = player.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.Died:Connect(function()
+                task.wait(0.1)
+                RemoveESP(player)
+            end)
+        end
+    end
+end
 
 -- ============================================================================
 -- SILENT AIM HOOK
