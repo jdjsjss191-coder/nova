@@ -606,3 +606,67 @@ end
 if cfg['rapid fire'] and cfg['rapid fire']['enabled'] then
     StartRapidFire()
 end
+
+-- ============================================================================
+-- SPREAD MODIFICATIONS
+-- ============================================================================
+local oldRandom = nil
+
+local function HookSpread()
+    if oldRandom then return end -- Already hooked
+    
+    oldRandom = hookfunction(math.random, function(...)
+        local args = {...}
+        
+        -- If called from our script, use original
+        if checkcaller() then
+            return oldRandom(...)
+        end
+        
+        -- Check if this is a spread-related random call
+        -- Game uses math.random with specific ranges for bullet spread
+        if (#args == 0) or 
+           (args[1] == -0.05 and args[2] == 0.05) or 
+           (args[1] == -0.1) or 
+           (args[1] == -0.05) then
+            
+            if cfg['spread modifications']['enabled'] then
+                -- Check if specific weapons mode is enabled
+                if cfg['spread modifications']['specific weapons']['enabled'] then
+                    local char = LocalPlayer.Character
+                    if char then
+                        local tool = char:FindFirstChildOfClass("Tool")
+                        if tool then
+                            local weaponName = tool.Name
+                            local found = false
+                            
+                            -- Check if current weapon is in the list
+                            for _, weapon in pairs(cfg['spread modifications']['specific weapons']['weapons']) do
+                                if weaponName == weapon then
+                                    found = true
+                                    break
+                                end
+                            end
+                            
+                            if found then
+                                -- Reduce spread by multiplying by amount/100
+                                return oldRandom(...) * (cfg['spread modifications']['amount'] / 100)
+                            end
+                        end
+                    end
+                else
+                    -- Apply to all weapons
+                    return oldRandom(...) * (cfg['spread modifications']['amount'] / 100)
+                end
+            end
+        end
+        
+        -- Default behavior for non-spread calls
+        return oldRandom(...)
+    end)
+end
+
+-- Initialize spread modifications if enabled
+if cfg['spread modifications'] and cfg['spread modifications']['enabled'] then
+    HookSpread()
+end
