@@ -11,7 +11,6 @@ local silent_aim_locked = false
 local silent_aim_key_was_pressed = false
 local cached_target = nil
 local is_silent_ready = false
-local silent_part_pos = Vector2.new(0, 0)
 
 local function get_effective_fov()
     if not cfg['gun_based_fov'] then
@@ -156,6 +155,7 @@ local function update_silent_aim_key_state()
     silent_aim_key_was_pressed = is_pressed
 end
 
+-- Silent Aim Hook
 local grm = getrawmetatable(game)
 local oldindex = grm.__index
 setreadonly(grm, false)
@@ -192,7 +192,7 @@ setreadonly(grm, true)
 
 
 -- ============================================================================
--- ESP SYSTEM
+-- ESP SYSTEM (Fixed)
 -- ============================================================================
 local esp_labels = {}
 
@@ -220,7 +220,9 @@ end
 local function remove_esp(player)
     local esp = esp_labels[player.UserId]
     if esp then
-        esp.nametag:Remove()
+        pcall(function()
+            esp.nametag:Remove()
+        end)
         esp_labels[player.UserId] = nil
     end
 end
@@ -228,7 +230,9 @@ end
 local function refresh_esp()
     if not cfg['esp_enabled'] then
         for userid, esp in pairs(esp_labels) do
-            esp.nametag:Remove()
+            pcall(function()
+                esp.nametag:Remove()
+            end)
             esp_labels[userid] = nil
         end
         return
@@ -236,44 +240,49 @@ local function refresh_esp()
     
     for userid, esp in pairs(esp_labels) do
         local player = esp.player
+        
+        -- Check if player still exists
         if not player or not player.Parent then
-            esp.nametag.Visible = false
-            esp.nametag:Remove()
+            pcall(function()
+                esp.nametag.Visible = false
+                esp.nametag:Remove()
+            end)
             esp_labels[userid] = nil
             continue
         end
         
-        if player.Character and player.Character.Parent and 
-           player.Character:FindFirstChild("HumanoidRootPart") and 
-           player.Character:FindFirstChild("Head") then
+        -- Check if character exists
+        if not player.Character or not player.Character.Parent then
+            esp.nametag.Visible = false
+            continue
+        end
+        
+        local head = player.Character:FindFirstChild("Head")
+        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+        local hum = player.Character:FindFirstChildOfClass("Humanoid")
+        
+        if not head or not hrp or not hum or hum.Health <= 0 then
+            esp.nametag.Visible = false
+            continue
+        end
+        
+        -- Calculate ESP position
+        local worldpos = head.Position + Vector3.new(0, 1.5, 0)
+        local esppos, onscreen = camera:WorldToViewportPoint(worldpos)
+        
+        if onscreen and esppos.Z > 0 then
+            -- Update position every frame
+            esp.nametag.Position = Vector2.new(esppos.X, esppos.Y)
+            esp.nametag.Text = player.Name
             
-            local hum = player.Character:FindFirstChildOfClass("Humanoid")
-            if not hum or hum.Health <= 0 then
-                esp.nametag.Visible = false
-                continue
-            end
-            
-            local head = player.Character.Head
-            local hrp = player.Character.HumanoidRootPart
-            
-            local worldpos = head.Position + Vector3.new(0, 1.5, 0)
-            local esppos, onscreen = camera:WorldToViewportPoint(worldpos)
-            
-            if onscreen and esppos.Z > 0 then
-                esp.nametag.Position = Vector2.new(esppos.X, esppos.Y)
-                esp.nametag.Text = player.Name
-                
-                -- Turn red if this is the current target
-                if cached_target and cached_target == player then
-                    esp.nametag.Color = Color3.fromRGB(255, 0, 0)
-                else
-                    esp.nametag.Color = Color3.fromRGB(255, 255, 255)
-                end
-                
-                esp.nametag.Visible = true
+            -- Turn red if this is the current target
+            if cached_target and cached_target == player then
+                esp.nametag.Color = Color3.fromRGB(255, 0, 0)
             else
-                esp.nametag.Visible = false
+                esp.nametag.Color = Color3.fromRGB(255, 255, 255)
             end
+            
+            esp.nametag.Visible = true
         else
             esp.nametag.Visible = false
         end
@@ -282,62 +291,71 @@ end
 
 -- Initialize ESP for existing players
 for _, player in pairs(players:GetPlayers()) do
-    if player ~= localplayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+    if player ~= localplayer then
         add_esp(player)
     end
-    
-    player.CharacterAdded:Connect(function(char)
-        remove_esp(player)
-        char:WaitForChild("HumanoidRootPart")
-        task.wait(0.1)
-        add_esp(player)
-    end)
-    
-    player.CharacterRemoving:Connect(function()
-        remove_esp(player)
-    end)
 end
 
+-- Handle player added
 players.PlayerAdded:Connect(function(player)
     if player ~= localplayer then
         player.CharacterAdded:Connect(function(char)
-            remove_esp(player)
-            char:WaitForChild("HumanoidRootPart")
-            task.wait(0.1)
+            task.wait(0.5)
             add_esp(player)
-        end)
-        
-        player.CharacterRemoving:Connect(function()
-            remove_esp(player)
         end)
     end
 end)
 
+-- Handle player removing
 players.PlayerRemoving:Connect(function(player)
     remove_esp(player)
 end)
 
+-- Handle character respawn
+for _, player in pairs(players:GetPlayers()) do
+    if player ~= localplayer then
+        player.CharacterAdded:Connect(function(char)
+            task.wait(0.5)
+            if not esp_labels[player.UserId] then
+                add_esp(player)
+            end
+        end)
+        
+        player.CharacterRemoving:Connect(function()
+            local esp = esp_labels[player.UserId]
+            if esp then
+                esp.nametag.Visible = false
+            end
+        end)
+    end
+end
+
+-- Main Loop
 runservice.RenderStepped:Connect(function()
     update_silent_aim_key_state()
+    
+    -- Update ESP every frame
+    refresh_esp()
     
     if not should_silent_aim_be_active() then
         is_silent_ready = false
         cached_target = nil
-        refresh_esp()
         return
     end
     
+    -- Target acquisition
     if not cached_target or not cached_target.Character then
         local target = get_closest_player_from_cursor()
         cached_target = target
         
-        local target_part = get_target_part(target)
-        if target_part then
-            is_silent_ready = true
+        if target then
+            local target_part = get_target_part(target)
+            is_silent_ready = target_part ~= nil
         else
             is_silent_ready = false
         end
     else
+        -- Sticky aim logic
         if not cfg['sticky_aim'] then
             local target = get_closest_player_from_cursor()
             cached_target = target
@@ -346,37 +364,28 @@ runservice.RenderStepped:Connect(function()
                 if not is_target_within_fov(cached_target) then
                     cached_target = nil
                     is_silent_ready = false
-                    refresh_esp()
                     return
                 end
             end
         end
     end
     
+    -- Validate current target
     if cached_target and cached_target.Character then
         if cfg['knocked_check'] and is_player_knocked(cached_target) then
             cached_target = nil
             is_silent_ready = false
-            refresh_esp()
             return
         end
         
         local target_part = get_target_part(cached_target)
         if target_part then
             local part_screen, on_screen = camera:WorldToViewportPoint(target_part.Position)
-            
-            if on_screen then
-                silent_part_pos = Vector2.new(part_screen.X, part_screen.Y)
-                is_silent_ready = true
-            else
-                is_silent_ready = false
-            end
+            is_silent_ready = on_screen
         else
             is_silent_ready = false
         end
     else
         is_silent_ready = false
     end
-    
-    refresh_esp()
 end)
