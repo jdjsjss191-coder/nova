@@ -44,6 +44,7 @@ local ESPLabels = {}
 local LastTargetScan = 0
 local ScanRate = 1 / 60
 local SpeedEnabled = false
+local RapidFireActive = false
 
 -- Raycast Parameters
 local RayParams = RaycastParams.new()
@@ -561,74 +562,47 @@ end)
 task.spawn(SilentAimTargetLoop)
 
 -- ============================================================================
--- ANIMATION CHANGER
+-- RAPID FIRE
 -- ============================================================================
-local function ApplyAnimations()
-    if not cfg['animations']['enabled'] then return end
+local function StartRapidFire()
+    if RapidFireActive then return end
+    RapidFireActive = true
     
-    local char = LocalPlayer.Character
-    if not char then return end
+    local isMouseDown = false
     
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    
-    local animate = char:FindFirstChild("Animate")
-    if not animate then return end
-    
-    -- Helper function to replace animation
-    local function ReplaceAnim(animFolder, animId)
-        if not animFolder then return end
-        
-        for _, anim in pairs(animFolder:GetChildren()) do
-            if anim:IsA("Animation") then
-                anim.AnimationId = "rbxassetid://" .. animId
-            end
+    -- Mouse button tracking
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isMouseDown = true
         end
-    end
+    end)
     
-    -- Walk
-    if cfg['animations']['walk'] ~= 0 then
-        local walk = animate:FindFirstChild("walk")
-        ReplaceAnim(walk, cfg['animations']['walk'])
-    end
+    UserInputService.InputEnded:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isMouseDown = false
+        end
+    end)
     
-    -- Run
-    if cfg['animations']['run'] ~= 0 then
-        local run = animate:FindFirstChild("run")
-        ReplaceAnim(run, cfg['animations']['run'])
-    end
-    
-    -- Jump
-    if cfg['animations']['jump'] ~= 0 then
-        local jump = animate:FindFirstChild("jump")
-        ReplaceAnim(jump, cfg['animations']['jump'])
-    end
-    
-    -- Idle
-    if cfg['animations']['idle'] ~= 0 then
-        local idle = animate:FindFirstChild("idle")
-        ReplaceAnim(idle, cfg['animations']['idle'])
-    end
-    
-    -- Fall
-    if cfg['animations']['fall'] ~= 0 then
-        local fall = animate:FindFirstChild("fall")
-        ReplaceAnim(fall, cfg['animations']['fall'])
-    end
+    -- Rapid fire loop
+    task.spawn(function()
+        while cfg['rapid fire']['enabled'] do
+            if isMouseDown then
+                local char = LocalPlayer.Character
+                if char then
+                    local tool = char:FindFirstChildOfClass("Tool")
+                    if tool then
+                        tool:Activate()
+                    end
+                end
+            end
+            task.wait(0.01) -- 100 shots per second
+        end
+    end)
 end
 
--- Apply animations on character spawn
-LocalPlayer.CharacterAdded:Connect(function(char)
-    char:WaitForChild("Animate")
-    task.wait(0.1)
-    ApplyAnimations()
-end)
-
--- Apply animations immediately if character exists
-if LocalPlayer.Character then
-    task.spawn(function()
-        LocalPlayer.Character:WaitForChild("Animate")
-        task.wait(0.1)
-        ApplyAnimations()
-    end)
+-- Start Rapid Fire if enabled
+if cfg['rapid fire'] and cfg['rapid fire']['enabled'] then
+    StartRapidFire()
 end
