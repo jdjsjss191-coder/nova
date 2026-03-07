@@ -43,6 +43,7 @@ local FoundTarget = false
 local ESPLabels = {}
 local LastTargetScan = 0
 local ScanRate = 1 / 60
+local SpeedEnabled = false
 
 -- Raycast Parameters
 local RayParams = RaycastParams.new()
@@ -493,6 +494,14 @@ UserInputService.InputBegan:Connect(function(input, processed)
             end
         end
     end
+    
+    -- Walkspeed toggle
+    if cfg['walkspeed']['enabled'] then
+        local speedKey = cfg['walkspeed']['key']
+        if input.KeyCode.Name == speedKey then
+            SpeedEnabled = not SpeedEnabled
+        end
+    end
 end)
 
 UserInputService.InputEnded:Connect(function(input, processed)
@@ -514,6 +523,17 @@ end)
 -- ============================================================================
 RunService.RenderStepped:Connect(function(dt)
     RefreshESP()
+    
+    -- Apply walkspeed
+    if cfg['walkspeed']['enabled'] and SpeedEnabled then
+        local char = LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.WalkSpeed = cfg['walkspeed']['speed']
+            end
+        end
+    end
 end)
 
 -- Start systems
