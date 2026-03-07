@@ -608,6 +608,88 @@ if cfg['rapid fire'] and cfg['rapid fire']['enabled'] then
 end
 
 -- ============================================================================
+-- FIRE RATE MODIFIER
+-- ============================================================================
+local function HookFireRate()
+    if not cfg['fire rate'] or not cfg['fire rate']['enabled'] then return end
+    
+    local fireDelay = cfg['fire rate']['delay']
+    
+    -- Hook tool activation to control fire rate
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        
+        if not checkcaller() then
+            -- Hook tool Activate to control fire rate
+            if method == "Activate" and self:IsA("Tool") then
+                local char = LocalPlayer.Character
+                if char and char:FindFirstChildOfClass("Tool") == self then
+                    -- Allow activation
+                    local result = oldNamecall(self, ...)
+                    
+                    -- Override the tool's cooldown
+                    task.spawn(function()
+                        task.wait(fireDelay)
+                        if self and self.Parent then
+                            -- Reset tool state to allow immediate refire
+                            pcall(function()
+                                self:Activate()
+                            end)
+                        end
+                    end)
+                    
+                    return result
+                end
+            end
+            
+            -- Hook RemoteEvent/RemoteFunction fire calls for gun systems
+            if (method == "FireServer" or method == "InvokeServer") then
+                if self.Name == "MainEvent" or self.Name == "MAINEVENT" or 
+                   self.Name == "Bullets" or self.Name == "ShootEvent" then
+                    -- Allow the shot
+                    return oldNamecall(self, ...)
+                end
+            end
+        end
+        
+        return oldNamecall(self, ...)
+    end)
+    
+    -- Also hook tool properties to reduce cooldown
+    task.spawn(function()
+        while cfg['fire rate'] and cfg['fire rate']['enabled'] do
+            task.wait(0.5)
+            
+            local char = LocalPlayer.Character
+            if char then
+                local tool = char:FindFirstChildOfClass("Tool")
+                if tool then
+                    -- Modify tool cooldown properties if they exist
+                    for _, obj in pairs(tool:GetDescendants()) do
+                        if obj:IsA("NumberValue") or obj:IsA("IntValue") then
+                            if obj.Name:lower():find("cooldown") or 
+                               obj.Name:lower():find("firerate") or
+                               obj.Name:lower():find("delay") then
+                                obj.Value = fireDelay
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    
+    print("[Nova] Fire Rate Modifier enabled! (Delay: " .. fireDelay .. "s)")
+end
+
+-- Initialize fire rate modifier
+if cfg['fire rate'] and cfg['fire rate']['enabled'] then
+    HookFireRate()
+end
+
+-- ============================================================================
 -- SPREAD MODIFICATIONS
 -- ============================================================================
 local oldRandom = nil
@@ -625,10 +707,10 @@ local function HookSpread()
         
         -- Check if this is a spread-related random call
         -- Game uses math.random with specific ranges for bullet spread
-        if (#args == 0) or 
-           (args[1] == -0.05 and args[2] == 0.05) or 
-           (args[1] == -0.1) or 
-           (args[1] == -0.05) then
+        if (#args == 0) or
+            (args[1] == -0.05 and args[2] == 0.05) or
+            (args[1] == -0.1) or
+            (args[1] == -0.05) then
             
             if cfg['spread modifications']['enabled'] then
                 -- Check if specific weapons mode is enabled
