@@ -1,242 +1,219 @@
-local cfg = shared.Nova or require(script.Parent.config)
-local players = game:GetService("Players")
-local uis = game:GetService("UserInputService")
-local runservice = game:GetService("RunService")
-local workspace = game:GetService("Workspace")
-local camera = workspace.CurrentCamera
-local localplayer = players.LocalPlayer
-local mouse = localplayer:GetMouse()
-
-local silent_aim_locked = false
-local silent_aim_key_was_pressed = false
-local cached_target = nil
-local selected_target = nil -- For Target mode
-local is_silent_ready = false
-
-local function get_effective_fov()
-    if not cfg['gun_based_fov'] then
-        return cfg['fov']
+-- Wait for config
+local timeout = 0
+repeat 
+    task.wait(0.1)
+    timeout = timeout + 0.1
+    if timeout > 5 then
+        warn("Config timeout! Make sure config.lua is loaded first.")
+        return
     end
-    
-    local char = localplayer.Character
-    if not char then return cfg['fov'] end
-    
-    local tool = char:FindFirstChildOfClass("Tool")
-    if not tool then return cfg['fov'] end
-    
-    local tool_name = tool.Name:lower()
-    
-    if tool_name:find("double%-barrel") or tool_name:find("double barrel") or tool_name:find("doublebarrel") then
-        return cfg['fov_double_barrel']
-    elseif tool_name:find("tacticalshotgun") or tool_name:find("tactical shotgun") then
-        return cfg['fov_tactical_shotgun']
-    elseif tool_name:find("revolver") then
-        return cfg['fov_revolver']
-    end
-    
-    return cfg['fov']
+until shared.Nova
+
+local cfg = shared.Nova
+
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+-- Locals
+local LocalPlayer = Players.LocalPlayer
+repeat task.wait() until LocalPlayer.Character
+local Mouse = LocalPlayer:GetMouse()
+local Camera = Workspace.CurrentCamera
+
+-- Performance Optimizations
+local math_sqrt = math.sqrt
+local math_huge = math.huge
+local math_min = math.min
+local math_max = math.max
+local math_clamp = math.clamp
+local math_floor = math.floor
+local math_abs = math.abs
+local Vector2_new = Vector2.new
+local Vector3_new = Vector3.new
+local CFrame_new = CFrame.new
+
+-- State Variables
+local CurrentTarget = nil
+local SelectedTarget = nil -- For Target mode
+local SilentAimActive = false
+local FoundTarget = false
+local ESPLabels = {}
+local LastTargetScan = 0
+local ScanRate = 1 / 60
+
+-- Raycast Parameters
+local RayParams = RaycastParams.new()
+RayParams.FilterType = Enum.RaycastFilterType.Exclude
+RayParams.IgnoreWater = true
+
+-- ============================================================================
+-- UTILITY FUNCTIONS
+-- ============================================================================
+local function FastDistance2D(a, b)
+    local dx = a.X - b.X
+    local dy = a.Y - b.Y
+    return math_sqrt(dx * dx + dy * dy)
 end
 
-local function get_target_part(player)
-    if not player.Character then return nil end
-    
-    if cfg['aim_part'] == 0 then
-        return player.Character:FindFirstChild("Head")
-    elseif cfg['aim_part'] == 1 then
-        local upper = player.Character:FindFirstChild("UpperTorso")
-        if upper then return upper end
-        return player.Character:FindFirstChild("Torso")
-    end
-    
-    return nil
+local function FastDistanceSquared3D(a, b)
+    local dx = a.X - b.X
+    local dy = a.Y - b.Y
+    local dz = a.Z - b.Z
+    return dx * dx + dy * dy + dz * dz
 end
 
-local function is_player_knocked(player)
+local function IsValidAddress(obj)
+    return obj ~= nil and typeof(obj) == "Instance" and obj.Parent ~= nil
+end
+
+local function PlayerKnocked(player)
     if not cfg['knocked_check'] then return false end
     if not player.Character then return false end
     
-    local body_effects = player.Character:FindFirstChild("BodyEffects")
-    if not body_effects then return false end
+    local bodyeffects = player.Character:FindFirstChild("BodyEffects")
+    if bodyeffects then
+        local ko = bodyeffects:FindFirstChild("K.O")
+        if ko and ko.Value == true then return true end
+    end
+    return false
+end
+
+local function PlayerDead(player)
+    if not player.Character then return true end
     
-    local ko = body_effects:FindFirstChild("K.O")
-    if ko and ko.Value == true then return true end
+    local bodyeffects = player.Character:FindFirstChild("BodyEffects")
+    if bodyeffects then
+        local dead = bodyeffects:FindFirstChild("Dead")
+        if dead and dead.Value == true then return true end
+        
+        local ko = bodyeffects:FindFirstChild("K.O")
+        if ko and ko.Value == true then return true end
+    end
     
-    local knocked = body_effects:FindFirstChild("Knocked")
-    if knocked and knocked.Value == true then return true end
+    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid and humanoid.Health <= 0 then return true end
     
     return false
 end
 
-local function is_target_within_fov(player)
-    if not player.Character then return false end
+local function CanSee(part)
+    if not part or not part.Parent then return false end
     
-    local mouse_location = uis:GetMouseLocation()
-    local target_part = get_target_part(player)
+    local char = part.Parent
+    local origin = Camera.CFrame.Position
+    local dir = (part.Position - origin).Unit * (part.Position - origin).Magnitude
     
-    if not target_part then return false end
+    RayParams.FilterDescendantsInstances = {LocalPlayer.Character, char}
     
-    local part_screen, on_screen = camera:WorldToViewportPoint(target_part.Position)
-    if not on_screen then return false end
+    local result = Workspace:Raycast(origin, dir, RayParams)
     
-    local distance_from_cursor = math.sqrt(
-        (part_screen.X - mouse_location.X)^2 +
-        (part_screen.Y - mouse_location.Y)^2
-    )
-    
-    return distance_from_cursor <= get_effective_fov()
+    return result == nil or result.Instance:IsDescendantOf(char)
 end
 
-local function get_closest_player_from_cursor()
-    local mouse_location = uis:GetMouseLocation()
-    local closest_player = nil
-    local shortest_distance = math.huge
+local function GetBodyParts(char)
+    return {
+        Head = char:FindFirstChild("Head"),
+        UpperTorso = char:FindFirstChild("UpperTorso"),
+        LowerTorso = char:FindFirstChild("LowerTorso"),
+        HumanoidRootPart = char:FindFirstChild("HumanoidRootPart"),
+    }
+end
+
+local function GetClosestBodyPart(char, mousePos)
+    local bodyparts = GetBodyParts(char)
+    local validCandidates = {}
     
-    for _, player in pairs(players:GetPlayers()) do
-        if player == localplayer then continue end
-        if not player.Character then continue end
-        
-        local target_part = get_target_part(player)
-        if not target_part then continue end
-        
-        local part_screen, on_screen = camera:WorldToViewportPoint(target_part.Position)
-        if not on_screen then continue end
-        
-        local distance_from_cursor = math.sqrt(
-            (part_screen.X - mouse_location.X)^2 +
-            (part_screen.Y - mouse_location.Y)^2
-        )
-        
-        if cfg['use_fov'] and distance_from_cursor > get_effective_fov() then
-            continue
-        end
-        
-        if cfg['knocked_check'] and is_player_knocked(player) then
-            continue
-        end
-        
-        if distance_from_cursor < shortest_distance then
-            shortest_distance = distance_from_cursor
-            closest_player = player
+    for name, part in pairs(bodyparts) do
+        if IsValidAddress(part) then
+            table.insert(validCandidates, part)
         end
     end
     
-    return closest_player
-end
-
-local function should_silent_aim_be_active()
-    if not cfg['enabled'] then return false end
-    return silent_aim_locked
-end
-
-local function update_silent_aim_key_state()
-    local key_code = Enum.KeyCode[cfg['key']]
-    if not key_code then return end
+    if #validCandidates == 0 then return nil end
     
-    local is_pressed = uis:IsKeyDown(key_code)
+    local bestPart = nil
+    local bestDist = math_huge
     
-    if cfg['mode'] == 'Toggle' then
-        if is_pressed and not silent_aim_key_was_pressed then
-            if cfg['targeting_mode'] == 'Target' then
-                -- Target mode: Select/deselect a specific player
-                if selected_target then
-                    -- Deselect current target
-                    selected_target = nil
-                    cached_target = nil
-                    silent_aim_locked = false
-                    print("[Nova] Target deselected")
-                else
-                    -- Select new target (closest to cursor)
-                    local target = get_closest_player_from_cursor()
-                    if target then
-                        selected_target = target
-                        cached_target = target
-                        silent_aim_locked = true
-                        print("[Nova] Locked onto: " .. target.Name)
-                    else
-                        print("[Nova] No target found in FOV")
-                    end
-                end
-            else
-                -- Auto mode: Toggle on/off
-                silent_aim_locked = not silent_aim_locked
-                if not silent_aim_locked then
-                    cached_target = nil
-                    selected_target = nil
-                end
-            end
+    for _, part in ipairs(validCandidates) do
+        local screenpos, onscreen = Camera:WorldToViewportPoint(part.Position)
+        local dist
+        
+        if not onscreen or screenpos.Z <= 0 then
+            dist = 999999
+        else
+            local dx = screenpos.X - mousePos.X
+            local dy = screenpos.Y - mousePos.Y
+            dist = math_sqrt(dx * dx + dy * dy)
         end
-    else
-        -- Hold mode
-        if is_pressed then
-            if cfg['targeting_mode'] == 'Target' then
-                -- In Target mode with Hold, you need to select first
-                if not selected_target then
-                    local target = get_closest_player_from_cursor()
-                    if target then
-                        selected_target = target
-                        cached_target = target
-                        print("[Nova] Locked onto: " .. target.Name)
-                    end
-                end
-                silent_aim_locked = selected_target ~= nil
-            else
-                silent_aim_locked = true
+        
+        if dist < bestDist then
+            bestDist = dist
+            bestPart = part
+        end
+    end
+    
+    return bestPart
+end
+
+-- ============================================================================
+-- TARGET FINDING
+-- ============================================================================
+local function FindTargetClosestToMouse()
+    local mousePos = UserInputService:GetMouseLocation()
+    local fovSizeSquared = cfg['use_fov'] and (cfg['fov'] * cfg['fov']) or math_huge
+    local closestPlayer = nil
+    local closestVisible = nil
+    local closestDistSquared = math_huge
+    local closestVisibleDistSquared = math_huge
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if not player.Character then continue end
+        if not IsValidAddress(player.Character) then continue end
+        
+        local head = player.Character:FindFirstChild("Head")
+        if not head then continue end
+        
+        if PlayerDead(player) then continue end
+        if PlayerKnocked(player) then continue end
+        
+        local screenCoords, onScreen = Camera:WorldToViewportPoint(head.Position)
+        if not onScreen or screenCoords.Z <= 0 then continue end
+        
+        local screenPos2D = Vector2_new(screenCoords.X, screenCoords.Y)
+        local dx = mousePos.X - screenPos2D.X
+        local dy = mousePos.Y - screenPos2D.Y
+        local distSquared = dx * dx + dy * dy
+        
+        if cfg['use_fov'] and distSquared > fovSizeSquared then continue end
+        
+        local isVisible = CanSee(head)
+        
+        if isVisible then
+            if distSquared < closestVisibleDistSquared then
+                closestVisibleDistSquared = distSquared
+                closestVisible = player
             end
         else
-            silent_aim_locked = false
-            if cfg['targeting_mode'] == 'Auto' then
-                cached_target = nil
+            if distSquared < closestDistSquared then
+                closestDistSquared = distSquared
+                closestPlayer = player
             end
-            -- In Target mode, keep selected_target even when key is released
         end
     end
     
-    silent_aim_key_was_pressed = is_pressed
+    if closestVisible then return closestVisible end
+    return closestPlayer
 end
 
--- Silent Aim Hook
-local grm = getrawmetatable(game)
-local oldindex = grm.__index
-setreadonly(grm, false)
-
-grm.__index = function(self, key)
-    if not checkcaller() and self == mouse then
-        if key == "Hit" then
-            if not should_silent_aim_be_active() then
-                return oldindex(self, key)
-            end
-            
-            if not cached_target then
-                return oldindex(self, key)
-            end
-            
-            if not cached_target.Character then
-                return oldindex(self, key)
-            end
-            
-            if is_player_knocked(cached_target) then
-                return oldindex(self, key)
-            end
-            
-            local target_part = get_target_part(cached_target)
-            if target_part then
-                return CFrame.new(target_part.Position)
-            end
-        end
-    end
-    return oldindex(self, key)
-end
-
-setreadonly(grm, true)
-
-
 -- ============================================================================
--- ESP SYSTEM (Fixed)
+-- ESP SYSTEM
 -- ============================================================================
-local esp_labels = {}
-
-local function add_esp(player)
-    if player == localplayer then return end
+local function AddESP(player)
+    if player == LocalPlayer then return end
     if not cfg['esp_enabled'] then return end
     
     local esp = {
@@ -253,76 +230,71 @@ local function add_esp(player)
     esp.nametag.Visible = false
     esp.nametag.ZIndex = 1000
     
-    esp_labels[player.UserId] = esp
+    ESPLabels[player.UserId] = esp
 end
 
-local function remove_esp(player)
-    local esp = esp_labels[player.UserId]
+local function RemoveESP(player)
+    local esp = ESPLabels[player.UserId]
     if esp then
         pcall(function()
             esp.nametag:Remove()
         end)
-        esp_labels[player.UserId] = nil
+        ESPLabels[player.UserId] = nil
     end
 end
 
-local function refresh_esp()
+local function RefreshESP()
     if not cfg['esp_enabled'] then
-        for userid, esp in pairs(esp_labels) do
+        for userid, esp in pairs(ESPLabels) do
             pcall(function()
                 esp.nametag:Remove()
             end)
-            esp_labels[userid] = nil
+            ESPLabels[userid] = nil
         end
         return
     end
     
-    for userid, esp in pairs(esp_labels) do
+    for userid, esp in pairs(ESPLabels) do
         local player = esp.player
         
-        -- Check if player still exists
         if not player or not player.Parent then
             pcall(function()
                 esp.nametag.Visible = false
                 esp.nametag:Remove()
             end)
-            esp_labels[userid] = nil
+            ESPLabels[userid] = nil
             continue
         end
         
-        -- Check if character exists
         if not player.Character or not player.Character.Parent then
             esp.nametag.Visible = false
             continue
         end
         
         local head = player.Character:FindFirstChild("Head")
-        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
         local hum = player.Character:FindFirstChildOfClass("Humanoid")
         
-        if not head or not hrp or not hum or hum.Health <= 0 then
+        if not head or not hum or hum.Health <= 0 then
             esp.nametag.Visible = false
             continue
         end
         
-        -- Calculate ESP position
-        local worldpos = head.Position + Vector3.new(0, 1.5, 0)
-        local esppos, onscreen = camera:WorldToViewportPoint(worldpos)
+        local worldpos = head.Position + Vector3_new(0, 1.5, 0)
+        local esppos, onscreen = Camera:WorldToViewportPoint(worldpos)
         
         if onscreen and esppos.Z > 0 then
-            -- Update position every frame
-            esp.nametag.Position = Vector2.new(esppos.X, esppos.Y)
+            esp.nametag.Position = Vector2_new(esppos.X, esppos.Y)
             esp.nametag.Text = player.Name
             
-            -- Turn red if this is the selected target (in Target mode) or current target (in Auto mode)
+            -- Red for selected target in Target mode, or current target in Auto mode
             if cfg['targeting_mode'] == 'Target' then
-                if selected_target and selected_target == player then
+                if SelectedTarget and SelectedTarget == player then
                     esp.nametag.Color = Color3.fromRGB(255, 0, 0)
                 else
                     esp.nametag.Color = Color3.fromRGB(255, 255, 255)
                 end
             else
-                if cached_target and cached_target == player then
+                if CurrentTarget and CurrentTarget == player then
                     esp.nametag.Color = Color3.fromRGB(255, 0, 0)
                 else
                     esp.nametag.Color = Color3.fromRGB(255, 255, 255)
@@ -336,133 +308,203 @@ local function refresh_esp()
     end
 end
 
--- Initialize ESP for existing players
-for _, player in pairs(players:GetPlayers()) do
-    if player ~= localplayer then
-        add_esp(player)
+-- Initialize ESP
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        AddESP(player)
     end
 end
 
--- Handle player added
-players.PlayerAdded:Connect(function(player)
-    if player ~= localplayer then
+Players.PlayerAdded:Connect(function(player)
+    if player ~= LocalPlayer then
         player.CharacterAdded:Connect(function(char)
             task.wait(0.5)
-            add_esp(player)
+            AddESP(player)
         end)
     end
 end)
 
--- Handle player removing
-players.PlayerRemoving:Connect(function(player)
-    remove_esp(player)
+Players.PlayerRemoving:Connect(function(player)
+    RemoveESP(player)
 end)
 
--- Handle character respawn
-for _, player in pairs(players:GetPlayers()) do
-    if player ~= localplayer then
-        player.CharacterAdded:Connect(function(char)
-            task.wait(0.5)
-            if not esp_labels[player.UserId] then
-                add_esp(player)
+-- ============================================================================
+-- SILENT AIM HOOK
+-- ============================================================================
+local grm = getrawmetatable(game)
+local oldindex = grm.__index
+setreadonly(grm, false)
+
+grm.__index = function(self, key)
+    if not checkcaller() and self == Mouse and cfg['enabled'] then
+        if key == "Hit" then
+            if not SilentAimActive then return oldindex(self, key) end
+            if not CurrentTarget then return oldindex(self, key) end
+            if not CurrentTarget.Character then return oldindex(self, key) end
+            
+            if PlayerDead(CurrentTarget) then return oldindex(self, key) end
+            if PlayerKnocked(CurrentTarget) then return oldindex(self, key) end
+            
+            local char = CurrentTarget.Character
+            local mousePos = UserInputService:GetMouseLocation()
+            
+            -- Get target part based on aim_part setting
+            local targetPart = nil
+            if cfg['aim_part'] == 0 then
+                targetPart = char:FindFirstChild("Head")
+            elseif cfg['aim_part'] == 1 then
+                targetPart = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+            else
+                targetPart = GetClosestBodyPart(char, mousePos)
             end
-        end)
+            
+            if not targetPart then
+                targetPart = char:FindFirstChild("HumanoidRootPart")
+            end
+            
+            if targetPart then
+                return CFrame_new(targetPart.Position)
+            end
+        end
+    end
+    return oldindex(self, key)
+end
+
+setreadonly(grm, true)
+
+-- ============================================================================
+-- TARGET ACQUISITION LOOP
+-- ============================================================================
+local function SilentAimTargetLoop()
+    while true do
+        task.wait(ScanRate)
         
-        player.CharacterRemoving:Connect(function()
-            local esp = esp_labels[player.UserId]
-            if esp then
-                esp.nametag.Visible = false
+        if not SilentAimActive then
+            if cfg['targeting_mode'] == 'Auto' then
+                CurrentTarget = nil
             end
-        end)
-    end
-end
-
--- Main Loop
-runservice.RenderStepped:Connect(function()
-    update_silent_aim_key_state()
-    
-    -- Update ESP every frame
-    refresh_esp()
-    
-    if not should_silent_aim_be_active() then
-        is_silent_ready = false
-        if cfg['targeting_mode'] == 'Auto' then
-            cached_target = nil
+            FoundTarget = false
+            continue
         end
-        return
-    end
-    
-    -- Target acquisition based on mode
-    if cfg['targeting_mode'] == 'Target' then
-        -- Target mode: Only aim at selected target
-        if selected_target then
-            -- Validate selected target is still valid
-            if not selected_target.Character or is_player_knocked(selected_target) then
-                selected_target = nil
-                cached_target = nil
-                silent_aim_locked = false
-                is_silent_ready = false
-                print("[Nova] Target lost (knocked/died)")
-                return
-            end
-            
-            cached_target = selected_target
-            local target_part = get_target_part(selected_target)
-            if target_part then
-                local part_screen, on_screen = camera:WorldToViewportPoint(target_part.Position)
-                is_silent_ready = on_screen
+        
+        if cfg['targeting_mode'] == 'Target' then
+            -- Target mode: Only aim at selected target
+            if SelectedTarget then
+                if not SelectedTarget.Character or PlayerDead(SelectedTarget) or PlayerKnocked(SelectedTarget) then
+                    SelectedTarget = nil
+                    CurrentTarget = nil
+                    SilentAimActive = false
+                    FoundTarget = false
+                else
+                    CurrentTarget = SelectedTarget
+                    FoundTarget = true
+                end
             else
-                is_silent_ready = false
+                CurrentTarget = nil
+                FoundTarget = false
             end
         else
-            cached_target = nil
-            is_silent_ready = false
-        end
-    else
-        -- Auto mode: Automatically find closest target
-        if not cached_target or not cached_target.Character then
-            local target = get_closest_player_from_cursor()
-            cached_target = target
-            
-            if target then
-                local target_part = get_target_part(target)
-                is_silent_ready = target_part ~= nil
-            else
-                is_silent_ready = false
+            -- Auto mode: Find closest target
+            if cfg['sticky_aim'] and CurrentTarget then
+                local isValid = true
+                if not CurrentTarget.Character then
+                    isValid = false
+                elseif PlayerDead(CurrentTarget) then
+                    isValid = false
+                elseif PlayerKnocked(CurrentTarget) then
+                    isValid = false
+                end
+                
+                if isValid then
+                    FoundTarget = true
+                else
+                    CurrentTarget = nil
+                    FoundTarget = false
+                end
             end
-        else
-            -- Sticky aim logic
-            if not cfg['sticky_aim'] then
-                local target = get_closest_player_from_cursor()
-                cached_target = target
-            else
-                if cfg['use_fov'] then
-                    if not is_target_within_fov(cached_target) then
-                        cached_target = nil
-                        is_silent_ready = false
-                        return
-                    end
+            
+            if not FoundTarget then
+                local target = FindTargetClosestToMouse()
+                if target then
+                    CurrentTarget = target
+                    FoundTarget = true
+                else
+                    CurrentTarget = nil
+                    FoundTarget = false
                 end
             end
         end
-        
-        -- Validate current target
-        if cached_target and cached_target.Character then
-            if cfg['knocked_check'] and is_player_knocked(cached_target) then
-                cached_target = nil
-                is_silent_ready = false
-                return
-            end
-            
-            local target_part = get_target_part(cached_target)
-            if target_part then
-                local part_screen, on_screen = camera:WorldToViewportPoint(target_part.Position)
-                is_silent_ready = on_screen
+    end
+end
+
+-- ============================================================================
+-- INPUT HANDLING
+-- ============================================================================
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    
+    local silentKey = cfg['key']
+    if input.KeyCode.Name == silentKey then
+        if cfg['mode'] == 'Toggle' then
+            if cfg['targeting_mode'] == 'Target' then
+                -- Target mode: Select/deselect
+                if SelectedTarget then
+                    SelectedTarget = nil
+                    CurrentTarget = nil
+                    SilentAimActive = false
+                else
+                    local target = FindTargetClosestToMouse()
+                    if target then
+                        SelectedTarget = target
+                        CurrentTarget = target
+                        SilentAimActive = true
+                    end
+                end
             else
-                is_silent_ready = false
+                -- Auto mode: Toggle on/off
+                SilentAimActive = not SilentAimActive
+                if not SilentAimActive then
+                    CurrentTarget = nil
+                end
             end
         else
-            is_silent_ready = false
+            -- Hold mode
+            if cfg['targeting_mode'] == 'Target' then
+                if not SelectedTarget then
+                    local target = FindTargetClosestToMouse()
+                    if target then
+                        SelectedTarget = target
+                        CurrentTarget = target
+                    end
+                end
+                SilentAimActive = SelectedTarget ~= nil
+            else
+                SilentAimActive = true
+            end
         end
     end
 end)
+
+UserInputService.InputEnded:Connect(function(input, processed)
+    if processed then return end
+    
+    local silentKey = cfg['key']
+    if input.KeyCode.Name == silentKey then
+        if cfg['mode'] == 'Hold' then
+            SilentAimActive = false
+            if cfg['targeting_mode'] == 'Auto' then
+                CurrentTarget = nil
+            end
+        end
+    end
+end)
+
+-- ============================================================================
+-- MAIN RENDER LOOP
+-- ============================================================================
+RunService.RenderStepped:Connect(function(dt)
+    RefreshESP()
+end)
+
+-- Start systems
+task.spawn(SilentAimTargetLoop)
