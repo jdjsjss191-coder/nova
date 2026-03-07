@@ -116,10 +116,27 @@ end
 local function GetBodyParts(char)
     return {
         Head = char:FindFirstChild("Head"),
+        HumanoidRootPart = char:FindFirstChild("HumanoidRootPart"),
         UpperTorso = char:FindFirstChild("UpperTorso"),
         LowerTorso = char:FindFirstChild("LowerTorso"),
-        HumanoidRootPart = char:FindFirstChild("HumanoidRootPart"),
     }
+end
+
+local function GetTargetPart(char, mousePos)
+    local aimPart = cfg['aim_part']
+    
+    if aimPart == 'Head' then
+        return char:FindFirstChild("Head")
+    elseif aimPart == 'HumanoidRootPart' then
+        return char:FindFirstChild("HumanoidRootPart")
+    elseif aimPart == 'UpperTorso' then
+        return char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+    elseif aimPart == 'ClosestPart' then
+        return GetClosestBodyPart(char, mousePos)
+    end
+    
+    -- Fallback
+    return char:FindFirstChild("HumanoidRootPart")
 end
 
 local function GetClosestBodyPart(char, mousePos)
@@ -214,7 +231,7 @@ end
 -- ============================================================================
 local function AddESP(player)
     if player == LocalPlayer then return end
-    if not cfg['esp_enabled'] then return end
+    if not cfg['esp']['enabled'] then return end
     
     local esp = {
         player = player,
@@ -225,7 +242,7 @@ local function AddESP(player)
     esp.nametag.Center = true
     esp.nametag.Outline = true
     esp.nametag.OutlineColor = Color3.fromRGB(0, 0, 0)
-    esp.nametag.Color = Color3.fromRGB(255, 255, 255)
+    esp.nametag.Color = cfg['esp']['color']
     esp.nametag.Font = 3
     esp.nametag.Visible = false
     esp.nametag.ZIndex = 1000
@@ -244,7 +261,7 @@ local function RemoveESP(player)
 end
 
 local function RefreshESP()
-    if not cfg['esp_enabled'] then
+    if not cfg['esp']['enabled'] then
         for userid, esp in pairs(ESPLabels) do
             pcall(function()
                 esp.nametag:Remove()
@@ -289,15 +306,15 @@ local function RefreshESP()
             -- Red for selected target in Target mode, or current target in Auto mode
             if cfg['targeting_mode'] == 'Target' then
                 if SelectedTarget and SelectedTarget == player then
-                    esp.nametag.Color = Color3.fromRGB(255, 0, 0)
+                    esp.nametag.Color = cfg['esp']['target_color']
                 else
-                    esp.nametag.Color = Color3.fromRGB(255, 255, 255)
+                    esp.nametag.Color = cfg['esp']['color']
                 end
             else
                 if CurrentTarget and CurrentTarget == player then
-                    esp.nametag.Color = Color3.fromRGB(255, 0, 0)
+                    esp.nametag.Color = cfg['esp']['target_color']
                 else
-                    esp.nametag.Color = Color3.fromRGB(255, 255, 255)
+                    esp.nametag.Color = cfg['esp']['color']
                 end
             end
             
@@ -349,14 +366,7 @@ grm.__index = function(self, key)
             local mousePos = UserInputService:GetMouseLocation()
             
             -- Get target part based on aim_part setting
-            local targetPart = nil
-            if cfg['aim_part'] == 0 then
-                targetPart = char:FindFirstChild("Head")
-            elseif cfg['aim_part'] == 1 then
-                targetPart = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
-            else
-                targetPart = GetClosestBodyPart(char, mousePos)
-            end
+            local targetPart = GetTargetPart(char, mousePos)
             
             if not targetPart then
                 targetPart = char:FindFirstChild("HumanoidRootPart")
