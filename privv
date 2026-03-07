@@ -575,73 +575,60 @@ local function ApplyAnimations()
     local animate = char:FindFirstChild("Animate")
     if not animate then return end
     
+    -- Helper function to replace animation
+    local function ReplaceAnim(animFolder, animId)
+        if not animFolder then return end
+        
+        for _, anim in pairs(animFolder:GetChildren()) do
+            if anim:IsA("Animation") then
+                anim.AnimationId = "rbxassetid://" .. animId
+            end
+        end
+    end
+    
     -- Walk
     if cfg['animations']['walk'] ~= 0 then
         local walk = animate:FindFirstChild("walk")
-        if walk then
-            local walkanim = walk:FindFirstChildOfClass("Animation")
-            if walkanim then
-                walkanim.AnimationId = "rbxassetid://" .. cfg['animations']['walk']
-            end
-        end
+        ReplaceAnim(walk, cfg['animations']['walk'])
     end
     
     -- Run
     if cfg['animations']['run'] ~= 0 then
         local run = animate:FindFirstChild("run")
-        if run then
-            local runanim = run:FindFirstChildOfClass("Animation")
-            if runanim then
-                runanim.AnimationId = "rbxassetid://" .. cfg['animations']['run']
-            end
-        end
+        ReplaceAnim(run, cfg['animations']['run'])
     end
     
     -- Jump
     if cfg['animations']['jump'] ~= 0 then
         local jump = animate:FindFirstChild("jump")
-        if jump then
-            local jumpanim = jump:FindFirstChildOfClass("Animation")
-            if jumpanim then
-                jumpanim.AnimationId = "rbxassetid://" .. cfg['animations']['jump']
-            end
-        end
+        ReplaceAnim(jump, cfg['animations']['jump'])
     end
     
     -- Idle
     if cfg['animations']['idle'] ~= 0 then
         local idle = animate:FindFirstChild("idle")
-        if idle then
-            local idleanim1 = idle:FindFirstChild("Animation1")
-            local idleanim2 = idle:FindFirstChild("Animation2")
-            if idleanim1 then
-                idleanim1.AnimationId = "rbxassetid://" .. cfg['animations']['idle']
-            end
-            if idleanim2 then
-                idleanim2.AnimationId = "rbxassetid://" .. cfg['animations']['idle']
-            end
-        end
+        ReplaceAnim(idle, cfg['animations']['idle'])
     end
     
     -- Fall
     if cfg['animations']['fall'] ~= 0 then
         local fall = animate:FindFirstChild("fall")
-        if fall then
-            local fallanim = fall:FindFirstChildOfClass("Animation")
-            if fallanim then
-                fallanim.AnimationId = "rbxassetid://" .. cfg['animations']['fall']
-            end
-        end
+        ReplaceAnim(fall, cfg['animations']['fall'])
     end
 end
 
 -- Apply animations on character spawn
 LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(0.5)
+    char:WaitForChild("Animate")
+    task.wait(0.1)
     ApplyAnimations()
 end)
 
 -- Apply animations immediately if character exists
 if LocalPlayer.Character then
-    ApplyAnimations()
+    task.spawn(function()
+        LocalPlayer.Character:WaitForChild("Animate")
+        task.wait(0.1)
+        ApplyAnimations()
+    end)
 end
