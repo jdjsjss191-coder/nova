@@ -160,7 +160,7 @@ local grm = getrawmetatable(game)
 local oldindex = grm.__index
 setreadonly(grm, false)
 
-grm.__index = newcclosure(function(self, key)
+grm.__index = function(self, key)
     if not checkcaller() and self == mouse then
         if key == "Hit" then
             if not should_silent_aim_be_active() then
@@ -186,7 +186,9 @@ grm.__index = newcclosure(function(self, key)
         end
     end
     return oldindex(self, key)
-end)
+end
+
+setreadonly(grm, true)
 
 
 -- ============================================================================
