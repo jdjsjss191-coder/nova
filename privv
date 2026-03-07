@@ -10,6 +10,7 @@ local mouse = localplayer:GetMouse()
 local silent_aim_locked = false
 local silent_aim_key_was_pressed = false
 local cached_target = nil
+local selected_target = nil -- For Target mode
 local is_silent_ready = false
 
 local function get_effective_fov()
@@ -135,20 +136,58 @@ local function update_silent_aim_key_state()
     
     if cfg['mode'] == 'Toggle' then
         if is_pressed and not silent_aim_key_was_pressed then
-            silent_aim_locked = not silent_aim_locked
-        end
-        
-        if not silent_aim_locked then
-            cached_target = nil
-            is_silent_ready = false
+            if cfg['targeting_mode'] == 'Target' then
+                -- Target mode: Select/deselect a specific player
+                if selected_target then
+                    -- Deselect current target
+                    selected_target = nil
+                    cached_target = nil
+                    silent_aim_locked = false
+                    print("[Nova] Target deselected")
+                else
+                    -- Select new target (closest to cursor)
+                    local target = get_closest_player_from_cursor()
+                    if target then
+                        selected_target = target
+                        cached_target = target
+                        silent_aim_locked = true
+                        print("[Nova] Locked onto: " .. target.Name)
+                    else
+                        print("[Nova] No target found in FOV")
+                    end
+                end
+            else
+                -- Auto mode: Toggle on/off
+                silent_aim_locked = not silent_aim_locked
+                if not silent_aim_locked then
+                    cached_target = nil
+                    selected_target = nil
+                end
+            end
         end
     else
+        -- Hold mode
         if is_pressed then
-            silent_aim_locked = true
+            if cfg['targeting_mode'] == 'Target' then
+                -- In Target mode with Hold, you need to select first
+                if not selected_target then
+                    local target = get_closest_player_from_cursor()
+                    if target then
+                        selected_target = target
+                        cached_target = target
+                        print("[Nova] Locked onto: " .. target.Name)
+                    end
+                end
+                silent_aim_locked = selected_target ~= nil
+            else
+                silent_aim_locked = true
+            end
         else
             silent_aim_locked = false
-            cached_target = nil
-            is_silent_ready = false
+            if cfg['targeting_mode'] == 'Auto' then
+                cached_target = nil
+            end
+            -- In Target mode, keep selected_target even when key is released
         end
     end
     
@@ -275,11 +314,19 @@ local function refresh_esp()
             esp.nametag.Position = Vector2.new(esppos.X, esppos.Y)
             esp.nametag.Text = player.Name
             
-            -- Turn red if this is the current target
-            if cached_target and cached_target == player then
-                esp.nametag.Color = Color3.fromRGB(255, 0, 0)
+            -- Turn red if this is the selected target (in Target mode) or current target (in Auto mode)
+            if cfg['targeting_mode'] == 'Target' then
+                if selected_target and selected_target == player then
+                    esp.nametag.Color = Color3.fromRGB(255, 0, 0)
+                else
+                    esp.nametag.Color = Color3.fromRGB(255, 255, 255)
+                end
             else
-                esp.nametag.Color = Color3.fromRGB(255, 255, 255)
+                if cached_target and cached_target == player then
+                    esp.nametag.Color = Color3.fromRGB(255, 0, 0)
+                else
+                    esp.nametag.Color = Color3.fromRGB(255, 255, 255)
+                end
             end
             
             esp.nametag.Visible = true
@@ -339,53 +386,83 @@ runservice.RenderStepped:Connect(function()
     
     if not should_silent_aim_be_active() then
         is_silent_ready = false
-        cached_target = nil
+        if cfg['targeting_mode'] == 'Auto' then
+            cached_target = nil
+        end
         return
     end
     
-    -- Target acquisition
-    if not cached_target or not cached_target.Character then
-        local target = get_closest_player_from_cursor()
-        cached_target = target
-        
-        if target then
-            local target_part = get_target_part(target)
-            is_silent_ready = target_part ~= nil
+    -- Target acquisition based on mode
+    if cfg['targeting_mode'] == 'Target' then
+        -- Target mode: Only aim at selected target
+        if selected_target then
+            -- Validate selected target is still valid
+            if not selected_target.Character or is_player_knocked(selected_target) then
+                selected_target = nil
+                cached_target = nil
+                silent_aim_locked = false
+                is_silent_ready = false
+                print("[Nova] Target lost (knocked/died)")
+                return
+            end
+            
+            cached_target = selected_target
+            local target_part = get_target_part(selected_target)
+            if target_part then
+                local part_screen, on_screen = camera:WorldToViewportPoint(target_part.Position)
+                is_silent_ready = on_screen
+            else
+                is_silent_ready = false
+            end
         else
+            cached_target = nil
             is_silent_ready = false
         end
     else
-        -- Sticky aim logic
-        if not cfg['sticky_aim'] then
+        -- Auto mode: Automatically find closest target
+        if not cached_target or not cached_target.Character then
             local target = get_closest_player_from_cursor()
             cached_target = target
+            
+            if target then
+                local target_part = get_target_part(target)
+                is_silent_ready = target_part ~= nil
+            else
+                is_silent_ready = false
+            end
         else
-            if cfg['use_fov'] then
-                if not is_target_within_fov(cached_target) then
-                    cached_target = nil
-                    is_silent_ready = false
-                    return
+            -- Sticky aim logic
+            if not cfg['sticky_aim'] then
+                local target = get_closest_player_from_cursor()
+                cached_target = target
+            else
+                if cfg['use_fov'] then
+                    if not is_target_within_fov(cached_target) then
+                        cached_target = nil
+                        is_silent_ready = false
+                        return
+                    end
                 end
             end
         end
-    end
-    
-    -- Validate current target
-    if cached_target and cached_target.Character then
-        if cfg['knocked_check'] and is_player_knocked(cached_target) then
-            cached_target = nil
-            is_silent_ready = false
-            return
-        end
         
-        local target_part = get_target_part(cached_target)
-        if target_part then
-            local part_screen, on_screen = camera:WorldToViewportPoint(target_part.Position)
-            is_silent_ready = on_screen
+        -- Validate current target
+        if cached_target and cached_target.Character then
+            if cfg['knocked_check'] and is_player_knocked(cached_target) then
+                cached_target = nil
+                is_silent_ready = false
+                return
+            end
+            
+            local target_part = get_target_part(cached_target)
+            if target_part then
+                local part_screen, on_screen = camera:WorldToViewportPoint(target_part.Position)
+                is_silent_ready = on_screen
+            else
+                is_silent_ready = false
+            end
         else
             is_silent_ready = false
         end
-    else
-        is_silent_ready = false
     end
 end)
