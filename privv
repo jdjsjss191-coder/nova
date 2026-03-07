@@ -562,6 +562,40 @@ end)
 task.spawn(SilentAimTargetLoop)
 
 -- ============================================================================
+-- SPREAD MODIFIER
+-- ============================================================================
+local SpreadHook
+SpreadHook = hookfunction(math.random, function(...)
+    local args = {...}
+    
+    if checkcaller() then
+        return SpreadHook(...)
+    end
+    
+    -- Detect bullet spread calls
+    if (#args == 0) or (args[1] == -0.05 and args[2] == 0.05) or (args[1] == -0.1) or (args[1] == -0.05) then
+        if cfg['spread modifier']['enabled'] then
+            local char = LocalPlayer.Character
+            if char then
+                local tool = char:FindFirstChildOfClass("Tool")
+                if tool then
+                    local toolName = tool.Name:gsub("%[", ""):gsub("%]", "") -- Remove brackets
+                    local spreadValue = cfg['spread modifier'][toolName]
+                    
+                    if spreadValue then
+                        -- Convert 1-100 scale to 0.01-1.0 multiplier
+                        local multiplier = spreadValue / 100
+                        return SpreadHook(...) * multiplier
+                    end
+                end
+            end
+        end
+    end
+    
+    return SpreadHook(...)
+end)
+
+-- ============================================================================
 -- RAPID FIRE
 -- ============================================================================
 local function StartRapidFire()
