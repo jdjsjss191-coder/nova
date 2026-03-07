@@ -39,6 +39,7 @@ local CFrame_new = CFrame.new
 local CurrentTarget = nil
 local SelectedTarget = nil -- For Target mode
 local SilentAimActive = false
+local TriggerbotActive = false
 local FoundTarget = false
 local ESPLabels = {}
 local LastTargetScan = 0
@@ -69,6 +70,14 @@ end
 
 local function IsValidAddress(obj)
     return obj ~= nil and typeof(obj) == "Instance" and obj.Parent ~= nil
+end
+
+local function HoldingKnife()
+    if not cfg['knife_check'] then return false end
+    local char = LocalPlayer.Character
+    if not char then return false end
+    local tool = char:FindFirstChildOfClass("Tool")
+    return tool and tool.Name == "[Knife]"
 end
 
 local function PlayerKnocked(player)
@@ -102,6 +111,7 @@ local function PlayerDead(player)
 end
 
 local function CanSee(part)
+    if not cfg['visible_check'] then return true end -- If check disabled, always return true
     if not part or not part.Parent then return false end
     
     local char = part.Parent
@@ -181,6 +191,8 @@ end
 -- TARGET FINDING
 -- ============================================================================
 local function FindTargetClosestToMouse()
+    if HoldingKnife() then return nil end -- Don't target when holding knife
+    
     local mousePos = UserInputService:GetMouseLocation()
     local fovSizeSquared = cfg['use_fov'] and (cfg['fov'] * cfg['fov']) or math_huge
     local closestPlayer = nil
@@ -226,6 +238,42 @@ local function FindTargetClosestToMouse()
     
     if closestVisible then return closestVisible end
     return closestPlayer
+end
+
+local function FindTargetForTriggerbot()
+    if HoldingKnife() then return nil end -- Don't target when holding knife
+    
+    local mousePos = UserInputService:GetMouseLocation()
+    local fovSizeSquared = cfg['triggerbot']['use_fov'] and (cfg['triggerbot']['fov'] * cfg['triggerbot']['fov']) or math_huge
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if not player.Character then continue end
+        if not IsValidAddress(player.Character) then continue end
+        
+        local head = player.Character:FindFirstChild("Head")
+        if not head then continue end
+        
+        if PlayerDead(player) then continue end
+        if PlayerKnocked(player) then continue end
+        
+        -- Check if visible
+        if not CanSee(head) then continue end
+        
+        local screenCoords, onScreen = Camera:WorldToViewportPoint(head.Position)
+        if not onScreen or screenCoords.Z <= 0 then continue end
+        
+        local screenPos2D = Vector2_new(screenCoords.X, screenCoords.Y)
+        local dx = mousePos.X - screenPos2D.X
+        local dy = mousePos.Y - screenPos2D.Y
+        local distSquared = dx * dx + dy * dy
+        
+        if cfg['triggerbot']['use_fov'] and distSquared > fovSizeSquared then continue end
+        
+        return player
+    end
+    
+    return nil
 end
 
 -- ============================================================================
@@ -524,6 +572,19 @@ UserInputService.InputBegan:Connect(function(input, processed)
             SpeedEnabled = not SpeedEnabled
         end
     end
+    
+    -- Triggerbot toggle
+    if cfg['triggerbot']['enabled'] then
+        local triggerbotKey = cfg['triggerbot']['key']
+        if input.KeyCode.Name == triggerbotKey then
+            TriggerbotActive = not TriggerbotActive
+            if TriggerbotActive then
+                print("[Nova] Triggerbot enabled!")
+            else
+                print("[Nova] Triggerbot disabled!")
+            end
+        end
+    end
 end)
 
 UserInputService.InputEnded:Connect(function(input, processed)
@@ -560,6 +621,43 @@ end)
 
 -- Start systems
 task.spawn(SilentAimTargetLoop)
+
+-- ============================================================================
+-- TRIGGERBOT
+-- ============================================================================
+local function TriggerbotLoop()
+    while true do
+        task.wait(0.01) -- Check every 10ms
+        
+        if not cfg['triggerbot']['enabled'] or not TriggerbotActive then
+            continue
+        end
+        
+        if HoldingKnife() then continue end
+        
+        local target = FindTargetForTriggerbot()
+        
+        if target then
+            task.wait(cfg['triggerbot']['delay'])
+            
+            -- Verify target is still valid after delay
+            if target and target.Character and not PlayerDead(target) and not PlayerKnocked(target) then
+                local head = target.Character:FindFirstChild("Head")
+                if head and CanSee(head) then
+                    -- Shoot
+                    mouse1press()
+                    task.wait(0.05)
+                    mouse1release()
+                end
+            end
+        end
+    end
+end
+
+-- Start triggerbot
+if cfg['triggerbot'] and cfg['triggerbot']['enabled'] then
+    task.spawn(TriggerbotLoop)
+end
 
 -- ============================================================================
 -- RAPID FIRE
@@ -605,88 +703,6 @@ end
 -- Start Rapid Fire if enabled
 if cfg['rapid fire'] and cfg['rapid fire']['enabled'] then
     StartRapidFire()
-end
-
--- ============================================================================
--- FIRE RATE MODIFIER
--- ============================================================================
-local function HookFireRate()
-    if not cfg['fire rate'] or not cfg['fire rate']['enabled'] then return end
-    
-    local fireDelay = cfg['fire rate']['delay']
-    
-    -- Hook tool activation to control fire rate
-    local oldNamecall
-    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
-        
-        if not checkcaller() then
-            -- Hook tool Activate to control fire rate
-            if method == "Activate" and self:IsA("Tool") then
-                local char = LocalPlayer.Character
-                if char and char:FindFirstChildOfClass("Tool") == self then
-                    -- Allow activation
-                    local result = oldNamecall(self, ...)
-                    
-                    -- Override the tool's cooldown
-                    task.spawn(function()
-                        task.wait(fireDelay)
-                        if self and self.Parent then
-                            -- Reset tool state to allow immediate refire
-                            pcall(function()
-                                self:Activate()
-                            end)
-                        end
-                    end)
-                    
-                    return result
-                end
-            end
-            
-            -- Hook RemoteEvent/RemoteFunction fire calls for gun systems
-            if (method == "FireServer" or method == "InvokeServer") then
-                if self.Name == "MainEvent" or self.Name == "MAINEVENT" or 
-                   self.Name == "Bullets" or self.Name == "ShootEvent" then
-                    -- Allow the shot
-                    return oldNamecall(self, ...)
-                end
-            end
-        end
-        
-        return oldNamecall(self, ...)
-    end)
-    
-    -- Also hook tool properties to reduce cooldown
-    task.spawn(function()
-        while cfg['fire rate'] and cfg['fire rate']['enabled'] do
-            task.wait(0.5)
-            
-            local char = LocalPlayer.Character
-            if char then
-                local tool = char:FindFirstChildOfClass("Tool")
-                if tool then
-                    -- Modify tool cooldown properties if they exist
-                    for _, obj in pairs(tool:GetDescendants()) do
-                        if obj:IsA("NumberValue") or obj:IsA("IntValue") then
-                            if obj.Name:lower():find("cooldown") or 
-                               obj.Name:lower():find("firerate") or
-                               obj.Name:lower():find("delay") then
-                                obj.Value = fireDelay
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end)
-    
-    print("[Nova] Fire Rate Modifier enabled! (Delay: " .. fireDelay .. "s)")
-end
-
--- Initialize fire rate modifier
-if cfg['fire rate'] and cfg['fire rate']['enabled'] then
-    HookFireRate()
 end
 
 -- ============================================================================
