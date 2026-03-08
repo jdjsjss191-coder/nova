@@ -54,16 +54,6 @@ TargetTracer.Color = cfg['target tracer']['color']
 TargetTracer.Transparency = cfg['target tracer']['transparency']
 TargetTracer.ZIndex = 999
 
--- FOV Circle Drawing
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Visible = false
-FOVCircle.Thickness = 2
-FOVCircle.Color = Color3.fromRGB(255, 255, 255)
-FOVCircle.Transparency = 0.5
-FOVCircle.NumSides = 128
-FOVCircle.Filled = false
-FOVCircle.ZIndex = 998
-
 -- Raycast Parameters
 local RayParams = RaycastParams.new()
 RayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -89,7 +79,16 @@ local function IsValidAddress(obj)
     return obj ~= nil and typeof(obj) == "Instance" and obj.Parent ~= nil
 end
 
+local function HoldingKnife()
+    if not cfg['silent aim']['knife_check'] then return false end
+    local char = LocalPlayer.Character
+    if not char then return false end
+    local tool = char:FindFirstChildOfClass("Tool")
+    return tool and tool.Name == "[Knife]"
+end
+
 local function PlayerKnocked(player)
+    if not cfg['silent aim']['knocked_check'] then return false end
     if not player.Character then return false end
     
     local bodyeffects = player.Character:FindFirstChild("BodyEffects")
@@ -199,6 +198,8 @@ end
 -- TARGET FINDING
 -- ============================================================================
 local function FindTargetClosestToMouse()
+    if HoldingKnife() then return nil end -- Don't target when holding knife
+    
     local mousePos = UserInputService:GetMouseLocation()
     local fovSizeSquared = cfg['silent aim']['use_fov'] and (cfg['silent aim']['fov'] * cfg['silent aim']['fov']) or math_huge
     local closestPlayer = nil
@@ -215,7 +216,7 @@ local function FindTargetClosestToMouse()
         if not head then continue end
         
         if PlayerDead(player) then continue end
-        if cfg['silent aim']['knocked_check'] and PlayerKnocked(player) then continue end
+        if PlayerKnocked(player) then continue end
         
         local screenCoords, onScreen = Camera:WorldToViewportPoint(head.Position)
         if not onScreen or screenCoords.Z <= 0 then continue end
@@ -320,15 +321,7 @@ local function RefreshESP()
             continue
         end
         
-        -- ESP knock check (independent from silent aim)
-        if cfg['esp']['knocked_check'] and PlayerKnocked(player) then
-            esp.nametag.Visible = false
-            continue
-        end
-        
-        -- Calculate ESP position based on config
-        local yOffset = cfg['esp']['position'] == 'Below' and -1.5 or 1.5
-        local worldpos = head.Position + Vector3_new(0, yOffset, 0)
+        local worldpos = head.Position + Vector3_new(0, 1.5, 0)
         local esppos, onscreen = Camera:WorldToViewportPoint(worldpos)
         
         -- Only show if on screen and in front of camera
@@ -409,7 +402,7 @@ grm.__index = function(self, key)
             if not CurrentTarget.Character then return oldindex(self, key) end
             
             if PlayerDead(CurrentTarget) then return oldindex(self, key) end
-            if cfg['silent aim']['knocked_check'] and PlayerKnocked(CurrentTarget) then return oldindex(self, key) end
+            if PlayerKnocked(CurrentTarget) then return oldindex(self, key) end
             
             local char = CurrentTarget.Character
             local mousePos = UserInputService:GetMouseLocation()
@@ -422,20 +415,7 @@ grm.__index = function(self, key)
             end
             
             if targetPart then
-                local targetPos = targetPart.Position
-                
-                -- Apply prediction if enabled
-                if cfg['silent aim']['prediction']['enabled'] then
-                    local hrp = char:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        local velocity = hrp.AssemblyLinearVelocity
-                        local predX = velocity.X * cfg['silent aim']['prediction']['x']
-                        local predY = velocity.Y * cfg['silent aim']['prediction']['y']
-                        targetPos = targetPos + Vector3_new(predX, predY, velocity.Z * cfg['silent aim']['prediction']['x'])
-                    end
-                end
-                
-                return CFrame_new(targetPos)
+                return CFrame_new(targetPart.Position)
             end
         end
     end
@@ -462,7 +442,7 @@ local function SilentAimTargetLoop()
         if cfg['silent aim']['targeting_mode'] == 'Target' then
             -- Target mode: Only aim at selected target
             if SelectedTarget then
-                if not SelectedTarget.Character or PlayerDead(SelectedTarget) or (cfg['silent aim']['knocked_check'] and PlayerKnocked(SelectedTarget)) then
+                if not SelectedTarget.Character or PlayerDead(SelectedTarget) or PlayerKnocked(SelectedTarget) then
                     SelectedTarget = nil
                     CurrentTarget = nil
                     SilentAimActive = false
@@ -483,7 +463,7 @@ local function SilentAimTargetLoop()
                     isValid = false
                 elseif PlayerDead(CurrentTarget) then
                     isValid = false
-                elseif cfg['silent aim']['knocked_check'] and PlayerKnocked(CurrentTarget) then
+                elseif PlayerKnocked(CurrentTarget) then
                     isValid = false
                 end
                 
@@ -585,21 +565,11 @@ end)
 RunService.RenderStepped:Connect(function(dt)
     RefreshESP()
     
-    -- Update FOV circle
-    if cfg['silent aim']['fov_visible'] and cfg['silent aim']['use_fov'] then
-        local mousePos = UserInputService:GetMouseLocation()
-        FOVCircle.Position = Vector2_new(mousePos.X, mousePos.Y)
-        FOVCircle.Radius = cfg['silent aim']['fov']
-        FOVCircle.Visible = true
-    else
-        FOVCircle.Visible = false
-    end
-    
     -- Update target tracer
     if cfg['target tracer']['enabled'] and SilentAimActive and CurrentTarget then
         if CurrentTarget.Character then
             local head = CurrentTarget.Character:FindFirstChild("Head")
-            if head and not PlayerDead(CurrentTarget) and not (cfg['silent aim']['knocked_check'] and PlayerKnocked(CurrentTarget)) then
+            if head and not PlayerDead(CurrentTarget) and not PlayerKnocked(CurrentTarget) then
                 local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen and headPos.Z > 0 then
                     local mousePos = UserInputService:GetMouseLocation()
