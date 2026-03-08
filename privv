@@ -11,6 +11,131 @@ until shared.Nova
 
 local cfg = shared.Nova
 
+-- ============================================================================
+-- CONFIG AUTO-RELOAD SYSTEM
+-- ============================================================================
+local ConfigReloadEnabled = true
+local LastConfigCheck = tick()
+local ConfigCheckInterval = 0.5 -- Check every 0.5 seconds
+local ConfigHash = nil
+
+-- Generate a simple hash of the config to detect changes
+local function HashConfig(tbl)
+    local str = ""
+    for k, v in pairs(tbl) do
+        if type(v) == "table" then
+            str = str .. tostring(k) .. HashConfig(v)
+        else
+            str = str .. tostring(k) .. tostring(v)
+        end
+    end
+    return str
+end
+
+local function ReloadConfig()
+    if not shared.Nova then return end
+    
+    local oldCfg = cfg
+    cfg = shared.Nova
+    
+    -- Update visual elements that depend on config
+    if cfg['target tracer'] then
+        TargetTracer.Thickness = cfg['target tracer']['thickness']
+        TargetTracer.Color = cfg['target tracer']['color']
+        TargetTracer.Transparency = cfg['target tracer']['transparency']
+    end
+    
+    if cfg['silent aim']['fov'] then
+        FOVCircle.Radius = cfg['silent aim']['fov']
+    end
+    
+    -- Refresh ESP colors and settings
+    for userid, esp in pairs(ESPLabels) do
+        if esp and esp.nametag then
+            esp.nametag.Color = cfg['esp']['color']
+        end
+    end
+    
+    -- If silent aim was disabled, clear targets
+    if not cfg['silent aim']['enabled'] and oldCfg['silent aim']['enabled'] then
+        SilentAimActive = false
+        CurrentTarget = nil
+        SelectedTarget = nil
+    end
+    
+    -- If spread modifications changed, re-hook
+    if cfg['spread modifications']['enabled'] ~= oldCfg['spread modifications']['enabled'] then
+        if cfg['spread modifications']['enabled'] then
+            HookSpread()
+        end
+    end
+    
+    -- Update config hash
+    ConfigHash = HashConfig(cfg)
+    
+    print("[Nova] Config reloaded!")
+end
+
+-- Initialize config hash
+ConfigHash = HashConfig(cfg)
+
+-- Auto-reload config in background
+task.spawn(function()
+    while ConfigReloadEnabled do
+        task.wait(ConfigCheckInterval)
+        
+        -- Check if config has been updated by comparing hash
+        if shared.Nova then
+            local newHash = HashConfig(shared.Nova)
+            if newHash ~= ConfigHash then
+                ReloadConfig()
+            end
+        end
+    end
+end)
+
+-- Chat command to manually reload config
+local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Try to hook chat for manual reload command
+pcall(function()
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        TextChatService.MessageReceived:Connect(function(message)
+            if message.TextSource and message.TextSource.UserId == LocalPlayer.UserId then
+                if message.Text:lower() == "/reloadconfig" or message.Text:lower() == "/reload" then
+                    ReloadConfig()
+                end
+            end
+        end)
+    else
+        -- Legacy chat
+        LocalPlayer.Chatted:Connect(function(msg)
+            if msg:lower() == "/reloadconfig" or msg:lower() == "/reload" then
+                ReloadConfig()
+            end
+        end)
+    end
+end)
+
+-- Target Tracer Drawing
+TargetTracer = Drawing.new("Line")
+TargetTracer.Visible = false
+TargetTracer.Thickness = cfg['target tracer']['thickness']
+TargetTracer.Color = cfg['target tracer']['color']
+TargetTracer.Transparency = cfg['target tracer']['transparency']
+TargetTracer.ZIndex = 999
+
+-- FOV Circle Drawing
+FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = false
+FOVCircle.Thickness = 2
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Transparency = 0.5
+FOVCircle.NumSides = 128
+FOVCircle.Filled = false
+FOVCircle.ZIndex = 998
+
 -- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -46,23 +171,9 @@ local ScanRate = 1 / 60
 local SpeedEnabled = false
 local RapidFireActive = false
 
--- Target Tracer Drawing
-local TargetTracer = Drawing.new("Line")
-TargetTracer.Visible = false
-TargetTracer.Thickness = cfg['target tracer']['thickness']
-TargetTracer.Color = cfg['target tracer']['color']
-TargetTracer.Transparency = cfg['target tracer']['transparency']
-TargetTracer.ZIndex = 999
-
--- FOV Circle Drawing
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Visible = false
-FOVCircle.Thickness = 2
-FOVCircle.Color = Color3.fromRGB(255, 255, 255)
-FOVCircle.Transparency = 0.5
-FOVCircle.NumSides = 64
-FOVCircle.Filled = false
-FOVCircle.ZIndex = 998
+-- Forward declare drawing objects
+local TargetTracer
+local FOVCircle
 
 -- Raycast Parameters
 local RayParams = RaycastParams.new()
@@ -422,7 +533,20 @@ grm.__index = function(self, key)
             end
             
             if targetPart then
-                return CFrame_new(targetPart.Position)
+                local targetPos = targetPart.Position
+                
+                -- Apply prediction if enabled
+                if cfg['silent aim']['prediction']['enabled'] then
+                    local hrp = char:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        local velocity = hrp.AssemblyLinearVelocity
+                        local predX = velocity.X * cfg['silent aim']['prediction']['x']
+                        local predY = velocity.Y * cfg['silent aim']['prediction']['y']
+                        targetPos = targetPos + Vector3_new(predX, predY, velocity.Z * cfg['silent aim']['prediction']['x'])
+                    end
+                end
+                
+                return CFrame_new(targetPos)
             end
         end
     end
