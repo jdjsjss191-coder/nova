@@ -248,7 +248,7 @@ local function AddESP(player)
     esp.nametag.Outline = true
     esp.nametag.OutlineColor = Color3.fromRGB(0, 0, 0)
     esp.nametag.Color = cfg['esp']['color']
-    esp.nametag.Font = cfg['esp']['font'] or 2  -- Use font from config (default: Plex)
+    esp.nametag.Font = 2
     esp.nametag.Visible = false
     esp.nametag.ZIndex = 1000
     
@@ -398,7 +398,26 @@ grm.__index = function(self, key)
             end
             
             if targetPart then
-                return CFrame_new(targetPart.Position)
+                local targetPos = targetPart.Position
+                
+                -- Apply prediction if enabled
+                if cfg['silent aim']['prediction']['enabled'] then
+                    local hrp = char:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        local velocity = hrp.AssemblyLinearVelocity
+                        local predX = cfg['silent aim']['prediction']['x']
+                        local predY = cfg['silent aim']['prediction']['y']
+                        
+                        -- Calculate predicted position
+                        targetPos = targetPos + Vector3_new(
+                            velocity.X * predX,
+                            velocity.Y * predY,
+                            velocity.Z * predX
+                        )
+                    end
+                end
+                
+                return CFrame_new(targetPos)
             end
         end
     end
