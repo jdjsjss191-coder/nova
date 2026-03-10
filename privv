@@ -147,8 +147,8 @@ local function GetBodyParts(char)
     }
 end
 
-local function GetTargetPart(char, mousePos)
-    local aimPart = cfg['silent aim']['aim_part']
+local function GetTargetPart(char, mousePos, useCamlock)
+    local aimPart = useCamlock and cfg['camlock']['aim_part'] or cfg['silent aim']['aim_part']
     
     if aimPart == 'Head' then
         return char:FindFirstChild("Head")
@@ -492,7 +492,7 @@ grm.__index = function(self, key)
             local mousePos = UserInputService:GetMouseLocation()
             
             -- Get target part based on aim_part setting
-            local targetPart = GetTargetPart(char, mousePos)
+            local targetPart = GetTargetPart(char, mousePos, false)
             
             if not targetPart then
                 targetPart = char:FindFirstChild("HumanoidRootPart")
@@ -815,7 +815,7 @@ local function ApplyCamlock()
     if not CamlockTarget.Character then return end
     
     local char = CamlockTarget.Character
-    local targetPart = GetTargetPart(char, UserInputService:GetMouseLocation())
+    local targetPart = GetTargetPart(char, UserInputService:GetMouseLocation(), true)
     
     if not targetPart then return end
     
