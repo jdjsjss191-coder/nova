@@ -392,29 +392,11 @@ end
 -- ============================================================================
 local grm = getrawmetatable(game)
 local oldindex = grm.__index
-local oldnamecall = grm.__namecall
 setreadonly(grm, false)
-
--- Track if mouse button is down to only redirect when shooting
-local IsMouseDown = false
-
-UserInputService.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        IsMouseDown = true
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        IsMouseDown = false
-    end
-end)
 
 grm.__index = function(self, key)
     if not checkcaller() and self == Mouse and cfg['silent aim']['enabled'] then
         if key == "Hit" then
-            -- Only redirect when mouse is down (shooting)
-            if not IsMouseDown then return oldindex(self, key) end
             if not SilentAimActive then return oldindex(self, key) end
             if not CurrentTarget then return oldindex(self, key) end
             if not CurrentTarget.Character then return oldindex(self, key) end
@@ -438,45 +420,6 @@ grm.__index = function(self, key)
         end
     end
     return oldindex(self, key)
-end
-
-grm.__namecall = function(self, ...)
-    local method = getnamecallmethod()
-    
-    if not checkcaller() and cfg['silent aim']['enabled'] then
-        if method == "FireServer" or method == "InvokeServer" then
-            local args = {...}
-            
-            -- Check if this is a shooting-related remote
-            if SilentAimActive and CurrentTarget and CurrentTarget.Character then
-                if PlayerDead(CurrentTarget) or PlayerKnocked(CurrentTarget) then
-                    return oldnamecall(self, ...)
-                end
-                
-                local mousePos = UserInputService:GetMouseLocation()
-                local targetPart = GetTargetPart(CurrentTarget.Character, mousePos)
-                
-                if not targetPart then
-                    targetPart = CurrentTarget.Character:FindFirstChild("HumanoidRootPart")
-                end
-                
-                if targetPart then
-                    -- Modify arguments that contain Hit or Position data
-                    for i, arg in pairs(args) do
-                        if typeof(arg) == "CFrame" then
-                            args[i] = CFrame_new(targetPart.Position)
-                        elseif typeof(arg) == "Vector3" then
-                            args[i] = targetPart.Position
-                        end
-                    end
-                    
-                    return oldnamecall(self, unpack(args))
-                end
-            end
-        end
-    end
-    
-    return oldnamecall(self, ...)
 end
 
 setreadonly(grm, true)
