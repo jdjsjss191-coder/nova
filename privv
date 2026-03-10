@@ -46,12 +46,6 @@ local ScanRate = 1 / 60
 local SpeedEnabled = false
 local RapidFireActive = false
 
--- Camlock State
-local CamlockTarget = nil
-local CamlockSelectedTarget = nil
-local CamlockActive = false
-local CamlockFoundTarget = false
-
 -- Target Tracer Drawing
 local TargetTracer = Drawing.new("Line")
 TargetTracer.Visible = false
@@ -201,22 +195,6 @@ local function GetClosestBodyPart(char, mousePos)
 end
 
 -- ============================================================================
--- PREDICTION
--- ============================================================================
-local function GetPredictedPosition(part, predictionAmount)
-    if not cfg['camlock']['prediction']['enabled'] then
-        return part.Position
-    end
-    
-    if not cfg['camlock']['prediction']['use_velocity'] then
-        return part.Position
-    end
-    
-    local velocity = part.Velocity
-    return part.Position + (velocity * predictionAmount)
-end
-
--- ============================================================================
 -- TARGET FINDING
 -- ============================================================================
 local function FindTargetClosestToMouse()
@@ -251,57 +229,6 @@ local function FindTargetClosestToMouse()
         if cfg['silent aim']['use_fov'] and distSquared > fovSizeSquared then continue end
         
         local isVisible = CanSee(head)
-        
-        if isVisible then
-            if distSquared < closestVisibleDistSquared then
-                closestVisibleDistSquared = distSquared
-                closestVisible = player
-            end
-        else
-            if distSquared < closestDistSquared then
-                closestDistSquared = distSquared
-                closestPlayer = player
-            end
-        end
-    end
-    
-    if closestVisible then return closestVisible end
-    return closestPlayer
-end
-
-local function FindCamlockTarget()
-    if not cfg['camlock']['enabled'] then return nil end
-    if cfg['camlock']['knife_check'] and HoldingKnife() then return nil end
-    
-    local mousePos = UserInputService:GetMouseLocation()
-    local fovSizeSquared = cfg['camlock']['use_fov'] and (cfg['camlock']['fov'] * cfg['camlock']['fov']) or math_huge
-    local closestPlayer = nil
-    local closestVisible = nil
-    local closestDistSquared = math_huge
-    local closestVisibleDistSquared = math_huge
-    
-    for _, player in pairs(Players:GetPlayers()) do
-        if player == LocalPlayer then continue end
-        if not player.Character then continue end
-        if not IsValidAddress(player.Character) then continue end
-        
-        local head = player.Character:FindFirstChild("Head")
-        if not head then continue end
-        
-        if PlayerDead(player) then continue end
-        if cfg['camlock']['knocked_check'] and PlayerKnocked(player) then continue end
-        
-        local screenCoords, onScreen = Camera:WorldToViewportPoint(head.Position)
-        if not onScreen or screenCoords.Z <= 0 then continue end
-        
-        local screenPos2D = Vector2_new(screenCoords.X, screenCoords.Y)
-        local dx = mousePos.X - screenPos2D.X
-        local dy = mousePos.Y - screenPos2D.Y
-        local distSquared = dx * dx + dy * dy
-        
-        if cfg['camlock']['use_fov'] and distSquared > fovSizeSquared then continue end
-        
-        local isVisible = cfg['camlock']['visible_check'] and CanSee(head) or true
         
         if isVisible then
             if distSquared < closestVisibleDistSquared then
