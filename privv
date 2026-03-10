@@ -613,45 +613,50 @@ end
 
 setreadonly(grm, true)
 
--- Method 3: Hook GetMouse function
-local oldGetMouse = LocalPlayer.GetMouse
-LocalPlayer.GetMouse = function(self)
-    local mouse = oldGetMouse(self)
-    
-    local oldMouseIndex = getrawmetatable(mouse).__index
-    setreadonly(getrawmetatable(mouse), false)
-    
-    getrawmetatable(mouse).__index = function(m, k)
-        if k == "Hit" and cfg['silent aim']['enabled'] then
+-- Method 3: Hook GetMouse function (wrapped in pcall for safety)
+pcall(function()
+    local oldGetMouse = LocalPlayer.GetMouse
+    LocalPlayer.GetMouse = function(self)
+        local mouse = oldGetMouse(self)
+        
+        local mouseMetatable = getrawmetatable(mouse)
+        local oldMouseIndex = mouseMetatable.__index
+        setreadonly(mouseMetatable, false)
+        
+        mouseMetatable.__index = function(m, k)
+            if k == "Hit" and cfg['silent aim']['enabled'] then
+                local aimPos = GetAimPosition()
+                if aimPos then
+                    return CFrame_new(aimPos)
+                end
+            end
+            return oldMouseIndex(m, k)
+        end
+        
+        setreadonly(mouseMetatable, true)
+        return mouse
+    end
+end)
+
+-- Method 4: Hook UserInputService for direct input manipulation (wrapped in pcall)
+pcall(function()
+    local oldGetMouseLocation = UserInputService.GetMouseLocation
+    UserInputService.GetMouseLocation = function(self)
+        local mousePos = oldGetMouseLocation(self)
+        
+        if cfg['silent aim']['enabled'] and SilentAimActive and CurrentTarget then
             local aimPos = GetAimPosition()
             if aimPos then
-                return CFrame_new(aimPos)
+                local screenPos, onScreen = Camera:WorldToViewportPoint(aimPos)
+                if onScreen and screenPos.Z > 0 then
+                    return Vector2_new(screenPos.X, screenPos.Y)
+                end
             end
         end
-        return oldMouseIndex(m, k)
+        
+        return mousePos
     end
-    
-    setreadonly(getrawmetatable(mouse), true)
-    return mouse
-end
-
--- Method 4: Hook UserInputService for direct input manipulation
-local oldGetMouseLocation = UserInputService.GetMouseLocation
-UserInputService.GetMouseLocation = function(self)
-    local mousePos = oldGetMouseLocation(self)
-    
-    if cfg['silent aim']['enabled'] and SilentAimActive and CurrentTarget then
-        local aimPos = GetAimPosition()
-        if aimPos then
-            local screenPos, onScreen = Camera:WorldToViewportPoint(aimPos)
-            if onScreen and screenPos.Z > 0 then
-                return Vector2_new(screenPos.X, screenPos.Y)
-            end
-        end
-    end
-    
-    return mousePos
-end
+end)
 
 -- ============================================================================
 -- TARGET ACQUISITION LOOP
