@@ -45,8 +45,6 @@ local LastTargetScan = 0
 local ScanRate = 1 / 60
 local SpeedEnabled = false
 local RapidFireActive = false
-local TargetVelocityHistory = {} -- For resolver
-local LastCameraShake = Vector3_new(0, 0, 0)
 
 -- Target Tracer Drawing
 local TargetTracer = Drawing.new("Line")
@@ -178,151 +176,6 @@ local function GetClosestBodyPart(char, mousePos)
         end
     end
     return bestPart
-end
-
--- ============================================================================
--- ADVANCED SILENT AIM FUNCTIONS
--- ============================================================================
-
-local function GetSmartAimPart(char, mousePos)
-    if not cfg['silent aim']['smart_part_selection']['enabled'] then
-        return GetTargetPart(char, mousePos)
-    end
-    
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        local velocity = hrp.AssemblyLinearVelocity
-        local speed = math_sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z)
-        
-        -- If moving fast, aim for center mass instead of head
-        if speed > cfg['silent aim']['smart_part_selection']['velocity_threshold'] then
-            return char:FindFirstChild("UpperTorso") or char:FindFirstChild("HumanoidRootPart")
-        end
-    end
-    
-    return GetTargetPart(char, mousePos)
-end
-
-local function CalculateHitchance(char, targetPos)
-    if not cfg['silent aim']['hitchance']['enabled'] then
-        return 100
-    end
-    
-    local chance = 100
-    
-    -- Check movement
-    if cfg['silent aim']['hitchance']['check_movement'] then
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local velocity = hrp.AssemblyLinearVelocity
-            local speed = math_sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z)
-            
-            -- Reduce hitchance based on movement speed
-            if speed > 5 then
-                chance = chance - math_min(30, speed * 1.5)
-            end
-        end
-    end
-    
-    -- Check distance
-    if cfg['silent aim']['hitchance']['check_distance'] then
-        local distance = (Camera.CFrame.Position - targetPos).Magnitude
-        
-        -- Reduce hitchance for far targets
-        if distance > 100 then
-            chance = chance - math_min(25, (distance - 100) / 10)
-        end
-    end
-    
-    return math_max(0, chance)
-end
-
-local function ResolvePosition(char, targetPart)
-    if not cfg['silent aim']['resolver']['enabled'] then
-        return targetPart.Position
-    end
-    
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return targetPart.Position end
-    
-    local userId = Players:GetPlayerFromCharacter(char).UserId
-    
-    -- Initialize velocity history for this player
-    if not TargetVelocityHistory[userId] then
-        TargetVelocityHistory[userId] = {}
-    end
-    
-    local history = TargetVelocityHistory[userId]
-    local currentVel = hrp.AssemblyLinearVelocity
-    
-    -- Store velocity history (keep last 5 frames)
-    table.insert(history, currentVel)
-    if #history > 5 then
-        table.remove(history, 1)
-    end
-    
-    -- Detect desync/anti-aim
-    if cfg['silent aim']['resolver']['detect_desync'] and #history >= 3 then
-        local avgVel = Vector3_new(0, 0, 0)
-        for _, vel in ipairs(history) do
-            avgVel = avgVel + vel
-        end
-        avgVel = avgVel / #history
-        
-        -- If current velocity differs significantly from average, use average
-        local velDiff = (currentVel - avgVel).Magnitude
-        if velDiff > 10 then
-            return targetPart.Position
-        end
-    end
-    
-    return targetPart.Position
-end
-
-local function GetPredictedPosition(char, targetPart)
-    local targetPos = ResolvePosition(char, targetPart)
-    
-    if not cfg['silent aim']['prediction']['enabled'] then
-        return targetPos
-    end
-    
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return targetPos end
-    
-    local velocity = hrp.AssemblyLinearVelocity
-    local predX = cfg['silent aim']['prediction']['x']
-    local predY = cfg['silent aim']['prediction']['y']
-    local predZ = cfg['silent aim']['prediction']['z']
-    
-    -- Auto-adjust prediction based on distance
-    if cfg['silent aim']['prediction']['auto_predict'] then
-        local distance = (Camera.CFrame.Position - targetPos).Magnitude
-        local distanceFactor = math_min(1.5, distance / 100)
-        
-        predX = predX * distanceFactor
-        predY = predY * distanceFactor
-        predZ = predZ * distanceFactor
-    end
-    
-    -- Calculate predicted position
-    return targetPos + Vector3_new(
-        velocity.X * predX,
-        velocity.Y * predY,
-        velocity.Z * predZ
-    )
-end
-
-local function CompensateCameraShake()
-    if not cfg['silent aim']['shake_reduction']['enabled'] then
-        return Vector3_new(0, 0, 0)
-    end
-    
-    local currentShake = Camera.CFrame.Position - Camera.Focus.Position
-    local shakeDelta = currentShake - LastCameraShake
-    LastCameraShake = currentShake
-    
-    -- Apply compensation
-    return shakeDelta * cfg['silent aim']['shake_reduction']['amount']
 end
 
 -- ============================================================================
@@ -519,144 +372,59 @@ for _, player in pairs(Players:GetPlayers()) do
 end
 
 -- ============================================================================
--- SILENT AIM HOOKS (Multiple Methods for Maximum Compatibility)
+-- SILENT AIM HOOK
 -- ============================================================================
 
 local grm = getrawmetatable(game)
 local oldindex = grm.__index
-local oldnamecall = grm.__namecall
 setreadonly(grm, false)
 
--- Shared function to get the predicted aim position
-local function GetAimPosition()
-    if not SilentAimActive then return nil end
-    if not CurrentTarget then return nil end
-    if not CurrentTarget.Character then return nil end
-    if PlayerDead(CurrentTarget) then return nil end
-    if PlayerKnocked(CurrentTarget) then return nil end
-    
-    local char = CurrentTarget.Character
-    local mousePos = UserInputService:GetMouseLocation()
-    
-    -- Get smart aim part based on movement
-    local targetPart = GetSmartAimPart(char, mousePos)
-    if not targetPart then
-        targetPart = char:FindFirstChild("HumanoidRootPart")
-    end
-    
-    if targetPart then
-        -- Get predicted position with resolver
-        local predictedPos = GetPredictedPosition(char, targetPart)
-        
-        -- Calculate hitchance
-        local hitchance = CalculateHitchance(char, predictedPos)
-        
-        -- Only aim if hitchance is above minimum
-        if hitchance < cfg['silent aim']['hitchance']['min_chance'] then
-            return nil
-        end
-        
-        -- Compensate for camera shake
-        local shakeCompensation = CompensateCameraShake()
-        predictedPos = predictedPos - shakeCompensation
-        
-        return predictedPos
-    end
-    
-    return nil
-end
-
--- Method 1: __index hook (for Mouse.Hit property access)
 grm.__index = function(self, key)
     if not checkcaller() and self == Mouse and cfg['silent aim']['enabled'] then
         if key == "Hit" then
-            local aimPos = GetAimPosition()
-            if aimPos then
-                return CFrame_new(aimPos)
+            if not SilentAimActive then return oldindex(self, key) end
+            if not CurrentTarget then return oldindex(self, key) end
+            if not CurrentTarget.Character then return oldindex(self, key) end
+            if PlayerDead(CurrentTarget) then return oldindex(self, key) end
+            if PlayerKnocked(CurrentTarget) then return oldindex(self, key) end
+            
+            local char = CurrentTarget.Character
+            local mousePos = UserInputService:GetMouseLocation()
+            
+            -- Get target part based on aim_part setting
+            local targetPart = GetTargetPart(char, mousePos)
+            if not targetPart then
+                targetPart = char:FindFirstChild("HumanoidRootPart")
+            end
+            
+            if targetPart then
+                local targetPos = targetPart.Position
+                
+                -- Apply prediction if enabled
+                if cfg['silent aim']['prediction']['enabled'] then
+                    local hrp = char:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        local velocity = hrp.AssemblyLinearVelocity
+                        local predX = cfg['silent aim']['prediction']['x']
+                        local predY = cfg['silent aim']['prediction']['y']
+                        
+                        -- Calculate predicted position
+                        targetPos = targetPos + Vector3_new(
+                            velocity.X * predX,
+                            velocity.Y * predY,
+                            velocity.Z * predX
+                        )
+                    end
+                end
+                
+                return CFrame_new(targetPos)
             end
         end
     end
     return oldindex(self, key)
 end
 
--- Method 2: __namecall hook (for Mouse:GetMouse(), FireServer, InvokeServer, etc.)
-grm.__namecall = function(self, ...)
-    local args = {...}
-    local method = getnamecallmethod()
-    
-    if not checkcaller() and cfg['silent aim']['enabled'] then
-        -- Hook Mouse methods
-        if self == Mouse and method == "Hit" then
-            local aimPos = GetAimPosition()
-            if aimPos then
-                return CFrame_new(aimPos)
-            end
-        end
-        
-        -- Hook RemoteEvent:FireServer and RemoteFunction:InvokeServer
-        if method == "FireServer" or method == "InvokeServer" then
-            -- Check if any argument is Mouse.Hit
-            for i, arg in pairs(args) do
-                if typeof(arg) == "CFrame" then
-                    local aimPos = GetAimPosition()
-                    if aimPos then
-                        args[i] = CFrame_new(aimPos)
-                    end
-                end
-            end
-            return oldnamecall(self, unpack(args))
-        end
-    end
-    
-    return oldnamecall(self, ...)
-end
-
 setreadonly(grm, true)
-
--- Method 3: Hook GetMouse function (wrapped in pcall for safety)
-pcall(function()
-    local oldGetMouse = LocalPlayer.GetMouse
-    LocalPlayer.GetMouse = function(self)
-        local mouse = oldGetMouse(self)
-        
-        local mouseMetatable = getrawmetatable(mouse)
-        local oldMouseIndex = mouseMetatable.__index
-        setreadonly(mouseMetatable, false)
-        
-        mouseMetatable.__index = function(m, k)
-            if k == "Hit" and cfg['silent aim']['enabled'] then
-                local aimPos = GetAimPosition()
-                if aimPos then
-                    return CFrame_new(aimPos)
-                end
-            end
-            return oldMouseIndex(m, k)
-        end
-        
-        setreadonly(mouseMetatable, true)
-        return mouse
-    end
-end)
-
--- Method 4: Hook UserInputService for direct input manipulation (wrapped in pcall)
-pcall(function()
-    local oldGetMouseLocation = UserInputService.GetMouseLocation
-    UserInputService.GetMouseLocation = function(self)
-        local mousePos = oldGetMouseLocation(self)
-        
-        if cfg['silent aim']['enabled'] and SilentAimActive and CurrentTarget then
-            local aimPos = GetAimPosition()
-            if aimPos then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(aimPos)
-                if onScreen and screenPos.Z > 0 then
-                    return Vector2_new(screenPos.X, screenPos.Y)
-                end
-            end
-        end
-        
-        return mousePos
-    end
-end)
 
 -- ============================================================================
 -- TARGET ACQUISITION LOOP
