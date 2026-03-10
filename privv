@@ -395,9 +395,26 @@ local oldindex = grm.__index
 local oldnamecall = grm.__namecall
 setreadonly(grm, false)
 
+-- Track if mouse button is down to only redirect when shooting
+local IsMouseDown = false
+
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        IsMouseDown = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        IsMouseDown = false
+    end
+end)
+
 grm.__index = function(self, key)
     if not checkcaller() and self == Mouse and cfg['silent aim']['enabled'] then
         if key == "Hit" then
+            -- Only redirect when mouse is down (shooting)
+            if not IsMouseDown then return oldindex(self, key) end
             if not SilentAimActive then return oldindex(self, key) end
             if not CurrentTarget then return oldindex(self, key) end
             if not CurrentTarget.Character then return oldindex(self, key) end
