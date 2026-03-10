@@ -62,7 +62,6 @@ RayParams.IgnoreWater = true
 -- ============================================================================
 -- UTILITY FUNCTIONS
 -- ============================================================================
-
 local function FastDistance2D(a, b)
     local dx = a.X - b.X
     local dy = a.Y - b.Y
@@ -91,6 +90,7 @@ end
 local function PlayerKnocked(player)
     if not cfg['silent aim']['knocked_check'] then return false end
     if not player.Character then return false end
+    
     local bodyeffects = player.Character:FindFirstChild("BodyEffects")
     if bodyeffects then
         local ko = bodyeffects:FindFirstChild("K.O")
@@ -101,26 +101,34 @@ end
 
 local function PlayerDead(player)
     if not player.Character then return true end
+    
     local bodyeffects = player.Character:FindFirstChild("BodyEffects")
     if bodyeffects then
         local dead = bodyeffects:FindFirstChild("Dead")
         if dead and dead.Value == true then return true end
+        
         local ko = bodyeffects:FindFirstChild("K.O")
         if ko and ko.Value == true then return true end
     end
+    
     local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
     if humanoid and humanoid.Health <= 0 then return true end
+    
     return false
 end
 
 local function CanSee(part)
     if not cfg['silent aim']['visible_check'] then return true end -- If check disabled, always return true
     if not part or not part.Parent then return false end
+    
     local char = part.Parent
     local origin = Camera.CFrame.Position
     local dir = (part.Position - origin).Unit * (part.Position - origin).Magnitude
+    
     RayParams.FilterDescendantsInstances = {LocalPlayer.Character, char}
+    
     local result = Workspace:Raycast(origin, dir, RayParams)
+    
     return result == nil or result.Instance:IsDescendantOf(char)
 end
 
@@ -135,6 +143,7 @@ end
 
 local function GetTargetPart(char, mousePos)
     local aimPart = cfg['silent aim']['aim_part']
+    
     if aimPart == 'Head' then
         return char:FindFirstChild("Head")
     elseif aimPart == 'HumanoidRootPart' then
@@ -144,6 +153,7 @@ local function GetTargetPart(char, mousePos)
     elseif aimPart == 'ClosestPart' then
         return GetClosestBodyPart(char, mousePos)
     end
+    
     -- Fallback
     return char:FindFirstChild("HumanoidRootPart")
 end
@@ -151,18 +161,22 @@ end
 local function GetClosestBodyPart(char, mousePos)
     local bodyparts = GetBodyParts(char)
     local validCandidates = {}
+    
     for name, part in pairs(bodyparts) do
         if IsValidAddress(part) then
             table.insert(validCandidates, part)
         end
     end
+    
     if #validCandidates == 0 then return nil end
     
     local bestPart = nil
     local bestDist = math_huge
+    
     for _, part in ipairs(validCandidates) do
         local screenpos, onscreen = Camera:WorldToViewportPoint(part.Position)
         local dist
+        
         if not onscreen or screenpos.Z <= 0 then
             dist = 999999
         else
@@ -170,23 +184,24 @@ local function GetClosestBodyPart(char, mousePos)
             local dy = screenpos.Y - mousePos.Y
             dist = math_sqrt(dx * dx + dy * dy)
         end
+        
         if dist < bestDist then
             bestDist = dist
             bestPart = part
         end
     end
+    
     return bestPart
 end
 
 -- ============================================================================
 -- TARGET FINDING
 -- ============================================================================
-
 local function FindTargetClosestToMouse()
     if HoldingKnife() then return nil end -- Don't target when holding knife
+    
     local mousePos = UserInputService:GetMouseLocation()
     local fovSizeSquared = cfg['silent aim']['use_fov'] and (cfg['silent aim']['fov'] * cfg['silent aim']['fov']) or math_huge
-    
     local closestPlayer = nil
     local closestVisible = nil
     local closestDistSquared = math_huge
@@ -199,6 +214,7 @@ local function FindTargetClosestToMouse()
         
         local head = player.Character:FindFirstChild("Head")
         if not head then continue end
+        
         if PlayerDead(player) then continue end
         if PlayerKnocked(player) then continue end
         
@@ -213,6 +229,7 @@ local function FindTargetClosestToMouse()
         if cfg['silent aim']['use_fov'] and distSquared > fovSizeSquared then continue end
         
         local isVisible = CanSee(head)
+        
         if isVisible then
             if distSquared < closestVisibleDistSquared then
                 closestVisibleDistSquared = distSquared
@@ -233,7 +250,6 @@ end
 -- ============================================================================
 -- ESP SYSTEM
 -- ============================================================================
-
 local function AddESP(player)
     if player == LocalPlayer then return end
     if not cfg['esp']['enabled'] then return end
@@ -248,7 +264,7 @@ local function AddESP(player)
     esp.nametag.Outline = true
     esp.nametag.OutlineColor = Color3.fromRGB(0, 0, 0)
     esp.nametag.Color = cfg['esp']['color']
-    esp.nametag.Font = 2
+    esp.nametag.Font = 3
     esp.nametag.Visible = false
     esp.nametag.ZIndex = 1000
     
@@ -374,7 +390,6 @@ end
 -- ============================================================================
 -- SILENT AIM HOOK
 -- ============================================================================
-
 local grm = getrawmetatable(game)
 local oldindex = grm.__index
 setreadonly(grm, false)
@@ -385,6 +400,7 @@ grm.__index = function(self, key)
             if not SilentAimActive then return oldindex(self, key) end
             if not CurrentTarget then return oldindex(self, key) end
             if not CurrentTarget.Character then return oldindex(self, key) end
+            
             if PlayerDead(CurrentTarget) then return oldindex(self, key) end
             if PlayerKnocked(CurrentTarget) then return oldindex(self, key) end
             
@@ -393,31 +409,13 @@ grm.__index = function(self, key)
             
             -- Get target part based on aim_part setting
             local targetPart = GetTargetPart(char, mousePos)
+            
             if not targetPart then
                 targetPart = char:FindFirstChild("HumanoidRootPart")
             end
             
             if targetPart then
-                local targetPos = targetPart.Position
-                
-                -- Apply prediction if enabled
-                if cfg['silent aim']['prediction']['enabled'] then
-                    local hrp = char:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        local velocity = hrp.AssemblyLinearVelocity
-                        local predX = cfg['silent aim']['prediction']['x']
-                        local predY = cfg['silent aim']['prediction']['y']
-                        
-                        -- Calculate predicted position
-                        targetPos = targetPos + Vector3_new(
-                            velocity.X * predX,
-                            velocity.Y * predY,
-                            velocity.Z * predX
-                        )
-                    end
-                end
-                
-                return CFrame_new(targetPos)
+                return CFrame_new(targetPart.Position)
             end
         end
     end
@@ -429,7 +427,6 @@ setreadonly(grm, true)
 -- ============================================================================
 -- TARGET ACQUISITION LOOP
 -- ============================================================================
-
 local function SilentAimTargetLoop()
     while true do
         task.wait(ScanRate)
@@ -495,7 +492,6 @@ end
 -- ============================================================================
 -- INPUT HANDLING
 -- ============================================================================
-
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     
@@ -566,7 +562,6 @@ end)
 -- ============================================================================
 -- MAIN RENDER LOOP
 -- ============================================================================
-
 RunService.RenderStepped:Connect(function(dt)
     RefreshESP()
     
@@ -612,7 +607,6 @@ task.spawn(SilentAimTargetLoop)
 -- ============================================================================
 -- RAPID FIRE
 -- ============================================================================
-
 local function StartRapidFire()
     if RapidFireActive then return end
     RapidFireActive = true
@@ -659,7 +653,6 @@ end
 -- ============================================================================
 -- SPREAD MODIFICATIONS
 -- ============================================================================
-
 local oldRandom = nil
 
 local function HookSpread()
@@ -676,9 +669,9 @@ local function HookSpread()
         -- Check if this is a spread-related random call
         -- Game uses math.random with specific ranges for bullet spread
         if (#args == 0) or
-           (args[1] == -0.05 and args[2] == 0.05) or
-           (args[1] == -0.1) or
-           (args[1] == -0.05) then
+            (args[1] == -0.05 and args[2] == 0.05) or
+            (args[1] == -0.1) or
+            (args[1] == -0.05) then
             
             if cfg['spread modifications']['enabled'] then
                 -- Check if specific weapons mode is enabled
