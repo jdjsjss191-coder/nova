@@ -147,8 +147,8 @@ local function GetBodyParts(char)
     }
 end
 
-local function GetTargetPart(char, mousePos, useCamlock)
-    local aimPart = useCamlock and cfg['camlock']['aim_part'] or cfg['silent aim']['aim_part']
+local function GetTargetPart(char, mousePos)
+    local aimPart = cfg['silent aim']['aim_part']
     
     if aimPart == 'Head' then
         return char:FindFirstChild("Head")
@@ -403,30 +403,19 @@ local function RefreshESP()
             esp.nametag.Text = player.Name
             
             -- Red for selected target in Target mode, or current target in Auto mode
-            local isTarget = false
-            
             if cfg['silent aim']['targeting_mode'] == 'Target' then
                 if SelectedTarget and SelectedTarget == player then
-                    isTarget = true
+                    esp.nametag.Color = cfg['esp']['target_color']
+                else
+                    esp.nametag.Color = cfg['esp']['color']
                 end
             else
                 if CurrentTarget and CurrentTarget == player then
-                    isTarget = true
+                    esp.nametag.Color = cfg['esp']['target_color']
+                else
+                    esp.nametag.Color = cfg['esp']['color']
                 end
             end
-            
-            -- Also check camlock target
-            if cfg['camlock']['targeting_mode'] == 'Target' then
-                if CamlockSelectedTarget and CamlockSelectedTarget == player then
-                    isTarget = true
-                end
-            else
-                if CamlockTarget and CamlockTarget == player then
-                    isTarget = true
-                end
-            end
-            
-            esp.nametag.Color = isTarget and cfg['esp']['target_color'] or cfg['esp']['color']
             
             esp.nametag.Visible = true
         else
@@ -492,7 +481,7 @@ grm.__index = function(self, key)
             local mousePos = UserInputService:GetMouseLocation()
             
             -- Get target part based on aim_part setting
-            local targetPart = GetTargetPart(char, mousePos, false)
+            local targetPart = GetTargetPart(char, mousePos)
             
             if not targetPart then
                 targetPart = char:FindFirstChild("HumanoidRootPart")
@@ -627,48 +616,6 @@ UserInputService.InputBegan:Connect(function(input, processed)
             SpeedEnabled = not SpeedEnabled
         end
     end
-    
-    -- Camlock toggle
-    if cfg['camlock']['enabled'] then
-        local camlockKey = cfg['camlock']['key']
-        if input.KeyCode.Name == camlockKey then
-            if cfg['camlock']['mode'] == 'Toggle' then
-                if cfg['camlock']['targeting_mode'] == 'Target' then
-                    if CamlockSelectedTarget then
-                        CamlockSelectedTarget = nil
-                        CamlockTarget = nil
-                        CamlockActive = false
-                    else
-                        local target = FindCamlockTarget()
-                        if target then
-                            CamlockSelectedTarget = target
-                            CamlockTarget = target
-                            CamlockActive = true
-                        end
-                    end
-                else
-                    CamlockActive = not CamlockActive
-                    if not CamlockActive then
-                        CamlockTarget = nil
-                    end
-                end
-            else
-                -- Hold mode
-                if cfg['camlock']['targeting_mode'] == 'Target' then
-                    if not CamlockSelectedTarget then
-                        local target = FindCamlockTarget()
-                        if target then
-                            CamlockSelectedTarget = target
-                            CamlockTarget = target
-                        end
-                    end
-                    CamlockActive = CamlockSelectedTarget ~= nil
-                else
-                    CamlockActive = true
-                end
-            end
-        end
-    end
 end)
 
 UserInputService.InputEnded:Connect(function(input, processed)
@@ -683,19 +630,6 @@ UserInputService.InputEnded:Connect(function(input, processed)
             end
         end
     end
-    
-    -- Camlock hold mode release
-    if cfg['camlock']['enabled'] then
-        local camlockKey = cfg['camlock']['key']
-        if input.KeyCode.Name == camlockKey then
-            if cfg['camlock']['mode'] == 'Hold' then
-                CamlockActive = false
-                if cfg['camlock']['targeting_mode'] == 'Auto' then
-                    CamlockTarget = nil
-                end
-            end
-        end
-    end
 end)
 
 -- ============================================================================
@@ -703,7 +637,6 @@ end)
 -- ============================================================================
 RunService.RenderStepped:Connect(function(dt)
     RefreshESP()
-    ApplyCamlock()
     
     -- Update target tracer
     if cfg['target tracer']['enabled'] and SilentAimActive and CurrentTarget then
@@ -741,101 +674,8 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- ============================================================================
--- CAMLOCK TARGET LOOP
--- ============================================================================
-local function CamlockTargetLoop()
-    while true do
-        task.wait(ScanRate)
-        
-        if not CamlockActive then
-            if cfg['camlock']['targeting_mode'] == 'Auto' then
-                CamlockTarget = nil
-            end
-            CamlockFoundTarget = false
-            continue
-        end
-        
-        if cfg['camlock']['targeting_mode'] == 'Target' then
-            if CamlockSelectedTarget then
-                if not CamlockSelectedTarget.Character or PlayerDead(CamlockSelectedTarget) or 
-                   (cfg['camlock']['knocked_check'] and PlayerKnocked(CamlockSelectedTarget)) then
-                    CamlockSelectedTarget = nil
-                    CamlockTarget = nil
-                    CamlockActive = false
-                    CamlockFoundTarget = false
-                else
-                    CamlockTarget = CamlockSelectedTarget
-                    CamlockFoundTarget = true
-                end
-            else
-                CamlockTarget = nil
-                CamlockFoundTarget = false
-            end
-        else
-            if cfg['camlock']['sticky_aim'] and CamlockTarget then
-                local isValid = true
-                if not CamlockTarget.Character then
-                    isValid = false
-                elseif PlayerDead(CamlockTarget) then
-                    isValid = false
-                elseif cfg['camlock']['knocked_check'] and PlayerKnocked(CamlockTarget) then
-                    isValid = false
-                end
-                
-                if isValid then
-                    CamlockFoundTarget = true
-                else
-                    CamlockTarget = nil
-                    CamlockFoundTarget = false
-                end
-            end
-            
-            if not CamlockFoundTarget then
-                local target = FindCamlockTarget()
-                if target then
-                    CamlockTarget = target
-                    CamlockFoundTarget = true
-                else
-                    CamlockTarget = nil
-                    CamlockFoundTarget = false
-                end
-            end
-        end
-    end
-end
-
--- ============================================================================
--- CAMLOCK SYSTEM
--- ============================================================================
-local function ApplyCamlock()
-    if not cfg['camlock']['enabled'] then return end
-    if not CamlockActive then return end
-    if not CamlockTarget then return end
-    if not CamlockTarget.Character then return end
-    
-    local char = CamlockTarget.Character
-    local targetPart = GetTargetPart(char, UserInputService:GetMouseLocation(), true)
-    
-    if not targetPart then return end
-    
-    local predictedPos = GetPredictedPosition(targetPart, cfg['camlock']['prediction']['amount'])
-    
-    -- Apply shake if enabled
-    if cfg['camlock']['shake']['enabled'] then
-        local shakeX = (math.random() - 0.5) * cfg['camlock']['shake']['x']
-        local shakeY = (math.random() - 0.5) * cfg['camlock']['shake']['y']
-        local shakeZ = (math.random() - 0.5) * cfg['camlock']['shake']['z']
-        predictedPos = predictedPos + Vector3_new(shakeX, shakeY, shakeZ)
-    end
-    
-    local targetCFrame = CFrame_new(Camera.CFrame.Position, predictedPos)
-    Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, cfg['camlock']['smoothness'])
-end
-
 -- Start systems
 task.spawn(SilentAimTargetLoop)
-task.spawn(CamlockTargetLoop)
 
 -- ============================================================================
 -- RAPID FIRE
