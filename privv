@@ -46,6 +46,12 @@ local ScanRate = 1 / 60
 local SpeedEnabled = false
 local RapidFireActive = false
 
+-- Camlock State
+local CamlockTarget = nil
+local CamlockSelectedTarget = nil
+local CamlockActive = false
+local CamlockFoundTarget = false
+
 -- Target Tracer Drawing
 local TargetTracer = Drawing.new("Line")
 TargetTracer.Visible = false
@@ -195,6 +201,22 @@ local function GetClosestBodyPart(char, mousePos)
 end
 
 -- ============================================================================
+-- PREDICTION
+-- ============================================================================
+local function GetPredictedPosition(part, predictionAmount)
+    if not cfg['camlock']['prediction']['enabled'] then
+        return part.Position
+    end
+    
+    if not cfg['camlock']['prediction']['use_velocity'] then
+        return part.Position
+    end
+    
+    local velocity = part.Velocity
+    return part.Position + (velocity * predictionAmount)
+end
+
+-- ============================================================================
 -- TARGET FINDING
 -- ============================================================================
 local function FindTargetClosestToMouse()
@@ -229,6 +251,57 @@ local function FindTargetClosestToMouse()
         if cfg['silent aim']['use_fov'] and distSquared > fovSizeSquared then continue end
         
         local isVisible = CanSee(head)
+        
+        if isVisible then
+            if distSquared < closestVisibleDistSquared then
+                closestVisibleDistSquared = distSquared
+                closestVisible = player
+            end
+        else
+            if distSquared < closestDistSquared then
+                closestDistSquared = distSquared
+                closestPlayer = player
+            end
+        end
+    end
+    
+    if closestVisible then return closestVisible end
+    return closestPlayer
+end
+
+local function FindCamlockTarget()
+    if not cfg['camlock']['enabled'] then return nil end
+    if cfg['camlock']['knife_check'] and HoldingKnife() then return nil end
+    
+    local mousePos = UserInputService:GetMouseLocation()
+    local fovSizeSquared = cfg['camlock']['use_fov'] and (cfg['camlock']['fov'] * cfg['camlock']['fov']) or math_huge
+    local closestPlayer = nil
+    local closestVisible = nil
+    local closestDistSquared = math_huge
+    local closestVisibleDistSquared = math_huge
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if not player.Character then continue end
+        if not IsValidAddress(player.Character) then continue end
+        
+        local head = player.Character:FindFirstChild("Head")
+        if not head then continue end
+        
+        if PlayerDead(player) then continue end
+        if cfg['camlock']['knocked_check'] and PlayerKnocked(player) then continue end
+        
+        local screenCoords, onScreen = Camera:WorldToViewportPoint(head.Position)
+        if not onScreen or screenCoords.Z <= 0 then continue end
+        
+        local screenPos2D = Vector2_new(screenCoords.X, screenCoords.Y)
+        local dx = mousePos.X - screenPos2D.X
+        local dy = mousePos.Y - screenPos2D.Y
+        local distSquared = dx * dx + dy * dy
+        
+        if cfg['camlock']['use_fov'] and distSquared > fovSizeSquared then continue end
+        
+        local isVisible = cfg['camlock']['visible_check'] and CanSee(head) or true
         
         if isVisible then
             if distSquared < closestVisibleDistSquared then
@@ -330,19 +403,30 @@ local function RefreshESP()
             esp.nametag.Text = player.Name
             
             -- Red for selected target in Target mode, or current target in Auto mode
+            local isTarget = false
+            
             if cfg['silent aim']['targeting_mode'] == 'Target' then
                 if SelectedTarget and SelectedTarget == player then
-                    esp.nametag.Color = cfg['esp']['target_color']
-                else
-                    esp.nametag.Color = cfg['esp']['color']
+                    isTarget = true
                 end
             else
                 if CurrentTarget and CurrentTarget == player then
-                    esp.nametag.Color = cfg['esp']['target_color']
-                else
-                    esp.nametag.Color = cfg['esp']['color']
+                    isTarget = true
                 end
             end
+            
+            -- Also check camlock target
+            if cfg['camlock']['targeting_mode'] == 'Target' then
+                if CamlockSelectedTarget and CamlockSelectedTarget == player then
+                    isTarget = true
+                end
+            else
+                if CamlockTarget and CamlockTarget == player then
+                    isTarget = true
+                end
+            end
+            
+            esp.nametag.Color = isTarget and cfg['esp']['target_color'] or cfg['esp']['color']
             
             esp.nametag.Visible = true
         else
@@ -543,6 +627,48 @@ UserInputService.InputBegan:Connect(function(input, processed)
             SpeedEnabled = not SpeedEnabled
         end
     end
+    
+    -- Camlock toggle
+    if cfg['camlock']['enabled'] then
+        local camlockKey = cfg['camlock']['key']
+        if input.KeyCode.Name == camlockKey then
+            if cfg['camlock']['mode'] == 'Toggle' then
+                if cfg['camlock']['targeting_mode'] == 'Target' then
+                    if CamlockSelectedTarget then
+                        CamlockSelectedTarget = nil
+                        CamlockTarget = nil
+                        CamlockActive = false
+                    else
+                        local target = FindCamlockTarget()
+                        if target then
+                            CamlockSelectedTarget = target
+                            CamlockTarget = target
+                            CamlockActive = true
+                        end
+                    end
+                else
+                    CamlockActive = not CamlockActive
+                    if not CamlockActive then
+                        CamlockTarget = nil
+                    end
+                end
+            else
+                -- Hold mode
+                if cfg['camlock']['targeting_mode'] == 'Target' then
+                    if not CamlockSelectedTarget then
+                        local target = FindCamlockTarget()
+                        if target then
+                            CamlockSelectedTarget = target
+                            CamlockTarget = target
+                        end
+                    end
+                    CamlockActive = CamlockSelectedTarget ~= nil
+                else
+                    CamlockActive = true
+                end
+            end
+        end
+    end
 end)
 
 UserInputService.InputEnded:Connect(function(input, processed)
@@ -557,6 +683,19 @@ UserInputService.InputEnded:Connect(function(input, processed)
             end
         end
     end
+    
+    -- Camlock hold mode release
+    if cfg['camlock']['enabled'] then
+        local camlockKey = cfg['camlock']['key']
+        if input.KeyCode.Name == camlockKey then
+            if cfg['camlock']['mode'] == 'Hold' then
+                CamlockActive = false
+                if cfg['camlock']['targeting_mode'] == 'Auto' then
+                    CamlockTarget = nil
+                end
+            end
+        end
+    end
 end)
 
 -- ============================================================================
@@ -564,6 +703,7 @@ end)
 -- ============================================================================
 RunService.RenderStepped:Connect(function(dt)
     RefreshESP()
+    ApplyCamlock()
     
     -- Update target tracer
     if cfg['target tracer']['enabled'] and SilentAimActive and CurrentTarget then
@@ -601,8 +741,101 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
+-- ============================================================================
+-- CAMLOCK TARGET LOOP
+-- ============================================================================
+local function CamlockTargetLoop()
+    while true do
+        task.wait(ScanRate)
+        
+        if not CamlockActive then
+            if cfg['camlock']['targeting_mode'] == 'Auto' then
+                CamlockTarget = nil
+            end
+            CamlockFoundTarget = false
+            continue
+        end
+        
+        if cfg['camlock']['targeting_mode'] == 'Target' then
+            if CamlockSelectedTarget then
+                if not CamlockSelectedTarget.Character or PlayerDead(CamlockSelectedTarget) or 
+                   (cfg['camlock']['knocked_check'] and PlayerKnocked(CamlockSelectedTarget)) then
+                    CamlockSelectedTarget = nil
+                    CamlockTarget = nil
+                    CamlockActive = false
+                    CamlockFoundTarget = false
+                else
+                    CamlockTarget = CamlockSelectedTarget
+                    CamlockFoundTarget = true
+                end
+            else
+                CamlockTarget = nil
+                CamlockFoundTarget = false
+            end
+        else
+            if cfg['camlock']['sticky_aim'] and CamlockTarget then
+                local isValid = true
+                if not CamlockTarget.Character then
+                    isValid = false
+                elseif PlayerDead(CamlockTarget) then
+                    isValid = false
+                elseif cfg['camlock']['knocked_check'] and PlayerKnocked(CamlockTarget) then
+                    isValid = false
+                end
+                
+                if isValid then
+                    CamlockFoundTarget = true
+                else
+                    CamlockTarget = nil
+                    CamlockFoundTarget = false
+                end
+            end
+            
+            if not CamlockFoundTarget then
+                local target = FindCamlockTarget()
+                if target then
+                    CamlockTarget = target
+                    CamlockFoundTarget = true
+                else
+                    CamlockTarget = nil
+                    CamlockFoundTarget = false
+                end
+            end
+        end
+    end
+end
+
+-- ============================================================================
+-- CAMLOCK SYSTEM
+-- ============================================================================
+local function ApplyCamlock()
+    if not cfg['camlock']['enabled'] then return end
+    if not CamlockActive then return end
+    if not CamlockTarget then return end
+    if not CamlockTarget.Character then return end
+    
+    local char = CamlockTarget.Character
+    local targetPart = GetTargetPart(char, UserInputService:GetMouseLocation())
+    
+    if not targetPart then return end
+    
+    local predictedPos = GetPredictedPosition(targetPart, cfg['camlock']['prediction']['amount'])
+    
+    -- Apply shake if enabled
+    if cfg['camlock']['shake']['enabled'] then
+        local shakeX = (math.random() - 0.5) * cfg['camlock']['shake']['x']
+        local shakeY = (math.random() - 0.5) * cfg['camlock']['shake']['y']
+        local shakeZ = (math.random() - 0.5) * cfg['camlock']['shake']['z']
+        predictedPos = predictedPos + Vector3_new(shakeX, shakeY, shakeZ)
+    end
+    
+    local targetCFrame = CFrame_new(Camera.CFrame.Position, predictedPos)
+    Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, cfg['camlock']['smoothness'])
+end
+
 -- Start systems
 task.spawn(SilentAimTargetLoop)
+task.spawn(CamlockTargetLoop)
 
 -- ============================================================================
 -- RAPID FIRE
