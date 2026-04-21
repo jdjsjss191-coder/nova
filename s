@@ -1,906 +1,585 @@
--- UI Library
--- Standalone Roblox Lua UI Framework
--- Dark theme, smooth animations, tab system, toggles, sliders, buttons
+-- vyronui.lua
+-- Vyron UI — loaded by pslams (Library + shared.VyronNew must already exist)
+local Library = getgenv().Library
+local Config  = shared.VyronNew
 
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
+local Window = Library:Window({
+    Name = "Vyron",
+    FadeSpeed = 0.25
+})
 
-local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
+local Watermark = Library:Watermark("vyron ~ ".. os.date("%b %d %Y") .. " ~ ".. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
+local KeybindList = Library:KeybindList()
 
-local Library = {}
-Library.__index = Library
+Watermark:SetVisibility(false)
+KeybindList:SetVisibility(false)
 
--- Theme
-local Theme = {
-    Background      = Color3.fromRGB(13, 17, 28),
-    BackgroundAlt   = Color3.fromRGB(18, 23, 36),
-    Surface         = Color3.fromRGB(22, 28, 44),
-    SurfaceAlt      = Color3.fromRGB(28, 35, 54),
-    Border          = Color3.fromRGB(40, 50, 75),
-    Accent          = Color3.fromRGB(99, 130, 255),
-    AccentDark      = Color3.fromRGB(70, 95, 200),
-    AccentGlow      = Color3.fromRGB(120, 150, 255),
-    Text            = Color3.fromRGB(220, 225, 240),
-    TextMuted       = Color3.fromRGB(130, 140, 170),
-    TextDim         = Color3.fromRGB(80, 90, 120),
-    ToggleOn        = Color3.fromRGB(99, 130, 255),
-    ToggleOff       = Color3.fromRGB(45, 55, 80),
-    SliderFill      = Color3.fromRGB(99, 130, 255),
-    SliderTrack     = Color3.fromRGB(35, 44, 68),
-    ButtonBase      = Color3.fromRGB(30, 38, 60),
-    ButtonHover     = Color3.fromRGB(40, 52, 85),
-    ButtonPress     = Color3.fromRGB(22, 28, 50),
-    Divider         = Color3.fromRGB(35, 44, 68),
-    Shadow          = Color3.fromRGB(5, 7, 12),
-}
+local CombatTab   = Window:Page({Name = "Combat",   Columns = 2, Subtabs = false})
+local VisualsTab  = Window:Page({Name = "Visuals",  Columns = 2, Subtabs = false})
+local WorldTab    = Window:Page({Name = "World",    Columns = 2, Subtabs = false})
+local MiscTab     = Window:Page({Name = "Misc",     Columns = 2, Subtabs = false})
+local SettingsTab = Window:Page({Name = "Settings", Columns = 2, Subtabs = false})
 
--- Tween helpers
-local function tween(obj, props, duration, style, direction)
-    style = style or Enum.EasingStyle.Quart
-    direction = direction or Enum.EasingDirection.Out
-    local info = TweenInfo.new(duration or 0.25, style, direction)
-    local t = TweenService:Create(obj, info, props)
-    t:Play()
-    return t
+do -- Combat Tab
+
+    -- Silent Aim
+    local SilentAimSection = CombatTab:Section({Name = "Silent Aim", Side = 1})
+
+    SilentAimSection:Toggle({Name = "Enabled", Flag = "SA Enabled", Default = Config["Silent Aim"]["Enabled"], Callback = function(Value)
+        Config["Silent Aim"]["Enabled"] = Value
+    end}):Keybind({Name = "Bind", Flag = "SA Bind", Default = Enum.KeyCode[Config["General"]["Binds"]["Silent Aim"]], Mode = "Toggle"})
+
+    SilentAimSection:Dropdown({Name = "Target Mode", Flag = "SA Target Mode", Default = Config["Silent Aim"]["Target Mode"], Items = {"Target", "Closest", "Random"}, Callback = function(Value)
+        Config["Silent Aim"]["Target Mode"] = Value
+    end})
+
+    SilentAimSection:Dropdown({Name = "Hit Part", Flag = "SA Hit Part", Default = Config["Silent Aim"]["Hit Part"], Items = {"HumanoidRootPart", "Head", "Torso"}, Callback = function(Value)
+        Config["Silent Aim"]["Hit Part"] = Value
+    end})
+
+    SilentAimSection:Toggle({Name = "Auto Shoot", Flag = "SA Auto Shoot", Default = Config["Silent Aim"]["Auto Shoot"], Callback = function(Value)
+        Config["Silent Aim"]["Auto Shoot"] = Value
+    end})
+
+    SilentAimSection:Divider()
+
+    SilentAimSection:Toggle({Name = "Distance Check", Flag = "SA Dist Check", Default = Config["Silent Aim"]["Distance Check"]["Enabled"], Callback = function(Value)
+        Config["Silent Aim"]["Distance Check"]["Enabled"] = Value
+    end})
+
+    SilentAimSection:Slider({Name = "Max Distance", Flag = "SA Max Dist", Min = 50, Max = 2000, Default = Config["Silent Aim"]["Distance Check"]["Max"], Decimals = 1, Suffix = " studs", Callback = function(Value)
+        Config["Silent Aim"]["Distance Check"]["Max"] = Value
+    end})
+
+    SilentAimSection:Divider()
+
+    SilentAimSection:Toggle({Name = "FOV Enabled", Flag = "SA FOV Enabled", Default = Config["Silent Aim"]["FOV"]["Enabled"], Callback = function(Value)
+        Config["Silent Aim"]["FOV"]["Enabled"] = Value
+    end}):Colorpicker({Name = "FOV Color", Flag = "SA FOV Color", Default = Config["Silent Aim"]["FOV"]["Color"], Callback = function(Value)
+        Config["Silent Aim"]["FOV"]["Color"] = Value
+    end})
+
+    SilentAimSection:Toggle({Name = "FOV Visible", Flag = "SA FOV Visible", Default = Config["Silent Aim"]["FOV"]["Visible"], Callback = function(Value)
+        Config["Silent Aim"]["FOV"]["Visible"] = Value
+    end})
+
+    SilentAimSection:Slider({Name = "FOV Size", Flag = "SA FOV Size", Min = 10, Max = 800, Default = Config["Silent Aim"]["FOV"]["Size"], Decimals = 1, Callback = function(Value)
+        Config["Silent Aim"]["FOV"]["Size"] = Value
+    end})
+
+    -- Camera Lock
+    local CamLockSection = CombatTab:Section({Name = "Camera Lock", Side = 1})
+
+    CamLockSection:Toggle({Name = "Enabled", Flag = "CL Enabled", Default = Config["Camera Lock"]["Enabled"], Callback = function(Value)
+        Config["Camera Lock"]["Enabled"] = Value
+    end}):Keybind({Name = "Bind", Flag = "CL Bind", Default = Enum.KeyCode[Config["General"]["Binds"]["Camera Lock"]], Mode = "Toggle"})
+
+    CamLockSection:Dropdown({Name = "Target Mode", Flag = "CL Target Mode", Default = Config["Camera Lock"]["Target Mode"], Items = {"Target", "Closest", "Random"}, Callback = function(Value)
+        Config["Camera Lock"]["Target Mode"] = Value
+    end})
+
+    CamLockSection:Dropdown({Name = "Hit Part", Flag = "CL Hit Part", Default = Config["Camera Lock"]["Hit Part"], Items = {"HumanoidRootPart", "Head", "Torso"}, Callback = function(Value)
+        Config["Camera Lock"]["Hit Part"] = Value
+    end})
+
+    CamLockSection:Slider({Name = "Smoothness", Flag = "CL Smoothness", Min = 0, Max = 1, Default = Config["Camera Lock"]["Smoothness"], Decimals = 0.01, Callback = function(Value)
+        Config["Camera Lock"]["Smoothness"] = Value
+    end})
+
+    CamLockSection:Slider({Name = "Prediction", Flag = "CL Prediction", Min = 0, Max = 1, Default = Config["Camera Lock"]["Prediction"], Decimals = 0.01, Callback = function(Value)
+        Config["Camera Lock"]["Prediction"] = Value
+    end})
+
+    CamLockSection:Divider()
+
+    CamLockSection:Toggle({Name = "FOV Enabled", Flag = "CL FOV Enabled", Default = Config["Camera Lock"]["FOV"]["Enabled"], Callback = function(Value)
+        Config["Camera Lock"]["FOV"]["Enabled"] = Value
+    end}):Colorpicker({Name = "FOV Color", Flag = "CL FOV Color", Default = Config["Camera Lock"]["FOV"]["Color"], Callback = function(Value)
+        Config["Camera Lock"]["FOV"]["Color"] = Value
+    end})
+
+    CamLockSection:Toggle({Name = "FOV Visible", Flag = "CL FOV Visible", Default = Config["Camera Lock"]["FOV"]["Visible"], Callback = function(Value)
+        Config["Camera Lock"]["FOV"]["Visible"] = Value
+    end})
+
+    CamLockSection:Slider({Name = "FOV Size", Flag = "CL FOV Size", Min = 10, Max = 800, Default = Config["Camera Lock"]["FOV"]["Size"], Decimals = 1, Callback = function(Value)
+        Config["Camera Lock"]["FOV"]["Size"] = Value
+    end})
+
+    -- Trigger Bot
+    local TriggerSection = CombatTab:Section({Name = "Trigger Bot", Side = 2})
+
+    TriggerSection:Toggle({Name = "Enabled", Flag = "TB Enabled", Default = Config["Trigger Bot"]["Enabled"], Callback = function(Value)
+        Config["Trigger Bot"]["Enabled"] = Value
+    end}):Keybind({Name = "Bind", Flag = "TB Bind", Default = Enum.KeyCode[Config["General"]["Binds"]["Trigger Bot"]], Mode = "Toggle"})
+
+    TriggerSection:Dropdown({Name = "Target Mode", Flag = "TB Target Mode", Default = Config["Trigger Bot"]["Target Mode"], Items = {"Target", "Closest", "Random"}, Callback = function(Value)
+        Config["Trigger Bot"]["Target Mode"] = Value
+    end})
+
+    TriggerSection:Slider({Name = "Cooldown", Flag = "TB Cooldown", Min = 0, Max = 1, Default = Config["Trigger Bot"]["Cooldown"], Decimals = 0.01, Suffix = "s", Callback = function(Value)
+        Config["Trigger Bot"]["Cooldown"] = Value
+    end})
+
+    TriggerSection:Divider()
+
+    TriggerSection:Toggle({Name = "FOV Enabled", Flag = "TB FOV Enabled", Default = Config["Trigger Bot"]["FOV"]["Enabled"], Callback = function(Value)
+        Config["Trigger Bot"]["FOV"]["Enabled"] = Value
+    end}):Colorpicker({Name = "FOV Color", Flag = "TB FOV Color", Default = Config["Trigger Bot"]["FOV"]["Color"], Callback = function(Value)
+        Config["Trigger Bot"]["FOV"]["Color"] = Value
+    end})
+
+    TriggerSection:Toggle({Name = "FOV Visible", Flag = "TB FOV Visible", Default = Config["Trigger Bot"]["FOV"]["Visible"], Callback = function(Value)
+        Config["Trigger Bot"]["FOV"]["Visible"] = Value
+    end})
+
+    TriggerSection:Slider({Name = "FOV Size", Flag = "TB FOV Size", Min = 5, Max = 200, Default = Config["Trigger Bot"]["FOV"]["Size"], Decimals = 1, Callback = function(Value)
+        Config["Trigger Bot"]["FOV"]["Size"] = Value
+    end})
+
+    -- Weapon
+    local WeaponSection = CombatTab:Section({Name = "Weapon", Side = 2})
+
+    WeaponSection:Toggle({Name = "Rapid Fire", Flag = "RF Enabled", Default = Config["Rapid Fire"]["Enabled"], Callback = function(Value)
+        Config["Rapid Fire"]["Enabled"] = Value
+    end}):Keybind({Name = "Bind", Flag = "RF Bind", Mode = "Toggle"})
+
+    WeaponSection:Slider({Name = "RF Cooldown", Flag = "RF Cooldown", Min = 0, Max = 1, Default = Config["Rapid Fire"]["Cooldown"], Decimals = 0.001, Suffix = "s", Callback = function(Value)
+        Config["Rapid Fire"]["Cooldown"] = Value
+    end})
+
+    WeaponSection:Divider()
+
+    WeaponSection:Toggle({Name = "Spread Modifier", Flag = "SM Enabled", Default = Config["Spread Modifier"]["Enabled"], Callback = function(Value)
+        Config["Spread Modifier"]["Enabled"] = Value
+    end})
+
+    WeaponSection:Slider({Name = "Spread Amount", Flag = "SM Amount", Min = 0, Max = 1, Default = Config["Spread Modifier"]["Amount"], Decimals = 0.01, Callback = function(Value)
+        Config["Spread Modifier"]["Amount"] = Value
+    end})
+
+    WeaponSection:Divider()
+
+    WeaponSection:Toggle({Name = "Infinite Range", Flag = "IR Enabled", Default = Config["Infinite Range"]["Enabled"], Callback = function(Value)
+        Config["Infinite Range"]["Enabled"] = Value
+    end})
+
+    WeaponSection:Slider({Name = "Range", Flag = "IR Range", Min = 100, Max = 999999999, Default = Config["Infinite Range"]["Range"], Decimals = 1, Callback = function(Value)
+        Config["Infinite Range"]["Range"] = Value
+    end})
+
+    WeaponSection:Toggle({Name = "Zero Cooldown", Flag = "ZC Enabled", Default = Config["Zero Cooldown"]["Enabled"], Callback = function(Value)
+        Config["Zero Cooldown"]["Enabled"] = Value
+    end})
+
+    WeaponSection:Divider()
+
+    WeaponSection:Toggle({Name = "Hitbox Expander", Flag = "HB Enabled", Default = Config["Hitbox Expander"]["Enabled"], Callback = function(Value)
+        Config["Hitbox Expander"]["Enabled"] = Value
+    end})
+
+    WeaponSection:Slider({Name = "Hitbox Size", Flag = "HB Size", Min = 1, Max = 50, Default = Config["Hitbox Expander"]["Size"], Decimals = 0.1, Callback = function(Value)
+        Config["Hitbox Expander"]["Size"] = Value
+    end})
+
+    WeaponSection:Toggle({Name = "Visualize Hitbox", Flag = "HB Visualize", Default = Config["Hitbox Expander"]["Visualize"], Callback = function(Value)
+        Config["Hitbox Expander"]["Visualize"] = Value
+    end})
 end
 
-local function tweenSpring(obj, props, duration)
-    return tween(obj, props, duration or 0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+do -- Visuals Tab
+
+    local ESPSection = VisualsTab:Section({Name = "ESP", Side = 1})
+
+    ESPSection:Toggle({Name = "Enabled", Flag = "ESP Enabled", Default = Config["ESP"]["Enabled"], Callback = function(Value)
+        Config["ESP"]["Enabled"] = Value
+    end}):Keybind({Name = "Bind", Flag = "ESP Bind", Default = Enum.KeyCode[Config["General"]["Binds"]["ESP"]], Mode = "Toggle"})
+
+    ESPSection:Colorpicker({Name = "ESP Color", Flag = "ESP Color", Default = Config["ESP"]["Color"], Callback = function(Value)
+        Config["ESP"]["Color"] = Value
+    end})
+
+    ESPSection:Colorpicker({Name = "Target Color", Flag = "ESP Target Color", Default = Config["ESP"]["Target Color"], Callback = function(Value)
+        Config["ESP"]["Target Color"] = Value
+    end})
+
+    ESPSection:Divider()
+
+    ESPSection:Toggle({Name = "Nametag", Flag = "ESP Nametag", Default = Config["ESP"]["Nametag"]["Enabled"], Callback = function(Value)
+        Config["ESP"]["Nametag"]["Enabled"] = Value
+    end})
+
+    ESPSection:Dropdown({Name = "Nametag Mode", Flag = "ESP Nametag Mode", Default = Config["ESP"]["Nametag"]["Mode"], Items = {"Username", "DisplayName"}, Callback = function(Value)
+        Config["ESP"]["Nametag"]["Mode"] = Value
+    end})
+
+    ESPSection:Dropdown({Name = "Nametag Position", Flag = "ESP Nametag Pos", Default = Config["ESP"]["Nametag"]["Position"], Items = {"Feet", "Head"}, Callback = function(Value)
+        Config["ESP"]["Nametag"]["Position"] = Value
+    end})
+
+    ESPSection:Slider({Name = "Nametag Size", Flag = "ESP Nametag Size", Min = 6, Max = 24, Default = Config["ESP"]["Nametag"]["Size"], Decimals = 1, Callback = function(Value)
+        Config["ESP"]["Nametag"]["Size"] = Value
+    end})
+
+    ESPSection:Divider()
+
+    ESPSection:Toggle({Name = "Box", Flag = "ESP Box", Default = Config["ESP"]["Box"]["Enabled"], Callback = function(Value)
+        Config["ESP"]["Box"]["Enabled"] = Value
+    end}):Colorpicker({Name = "Box Color", Flag = "ESP Box Color", Default = Config["ESP"]["Box"]["Color"], Callback = function(Value)
+        Config["ESP"]["Box"]["Color"] = Value
+    end})
+
+    ESPSection:Toggle({Name = "Health Bar", Flag = "ESP HealthBar", Default = Config["ESP"]["HealthBar"]["Enabled"], Callback = function(Value)
+        Config["ESP"]["HealthBar"]["Enabled"] = Value
+    end})
+
+    ESPSection:Toggle({Name = "Skeleton", Flag = "ESP Skeleton", Default = Config["ESP"]["Skeleton"]["Enabled"], Callback = function(Value)
+        Config["ESP"]["Skeleton"]["Enabled"] = Value
+    end}):Colorpicker({Name = "Skeleton Color", Flag = "ESP Skeleton Color", Default = Config["ESP"]["Skeleton"]["Color"], Callback = function(Value)
+        Config["ESP"]["Skeleton"]["Color"] = Value
+    end})
+
+    local TracerSection = VisualsTab:Section({Name = "Tracer", Side = 1})
+
+    TracerSection:Toggle({Name = "Enabled", Flag = "Tracer Enabled", Default = Config["Tracer"]["Enabled"], Callback = function(Value)
+        Config["Tracer"]["Enabled"] = Value
+    end}):Colorpicker({Name = "Color", Flag = "Tracer Color", Default = Config["Tracer"]["Color"], Callback = function(Value)
+        Config["Tracer"]["Color"] = Value
+    end})
+
+    TracerSection:Slider({Name = "Thickness", Flag = "Tracer Thickness", Min = 1, Max = 10, Default = Config["Tracer"]["Thickness"], Decimals = 0.5, Callback = function(Value)
+        Config["Tracer"]["Thickness"] = Value
+    end})
+
+    TracerSection:Slider({Name = "Transparency", Flag = "Tracer Transparency", Min = 0, Max = 1, Default = Config["Tracer"]["Transparency"], Decimals = 0.01, Callback = function(Value)
+        Config["Tracer"]["Transparency"] = Value
+    end})
+
+    local HUDSection = VisualsTab:Section({Name = "HUD", Side = 2})
+
+    HUDSection:Toggle({Name = "Enabled", Flag = "HUD Enabled", Default = Config["General"]["HUD"]["Enabled"], Callback = function(Value)
+        Config["General"]["HUD"]["Enabled"] = Value
+    end})
+
+    HUDSection:Label({Name = "Title Color", Alignment = "Left"}):Colorpicker({Name = "Title Color", Flag = "HUD Title Color", Default = Config["General"]["HUD"]["Title Color"], Callback = function(Value)
+        Config["General"]["HUD"]["Title Color"] = Value
+    end})
+
+    HUDSection:Label({Name = "Accent Color", Alignment = "Left"}):Colorpicker({Name = "Accent Color", Flag = "HUD Accent Color", Default = Config["General"]["HUD"]["Accent Color"], Callback = function(Value)
+        Config["General"]["HUD"]["Accent Color"] = Value
+    end})
+
+    HUDSection:Label({Name = "Active Color", Alignment = "Left"}):Colorpicker({Name = "Active Color", Flag = "HUD Active Color", Default = Config["General"]["HUD"]["Active Color"], Callback = function(Value)
+        Config["General"]["HUD"]["Active Color"] = Value
+    end})
+
+    HUDSection:Label({Name = "Inactive Color", Alignment = "Left"}):Colorpicker({Name = "Inactive Color", Flag = "HUD Inactive Color", Default = Config["General"]["HUD"]["Inactive Color"], Callback = function(Value)
+        Config["General"]["HUD"]["Inactive Color"] = Value
+    end})
+
+    local DmgSection = VisualsTab:Section({Name = "Damage Indicator", Side = 2})
+
+    DmgSection:Toggle({Name = "Enabled", Flag = "DI Enabled", Default = Config["Misc"]["Damage Indicator"]["Enabled"], Callback = function(Value)
+        Config["Misc"]["Damage Indicator"]["Enabled"] = Value
+    end})
 end
 
--- Utility: create instance with properties
-local function make(class, props, parent)
-    local inst = Instance.new(class)
-    for k, v in pairs(props or {}) do
-        inst[k] = v
+do -- World Tab
+
+    local FogSection = WorldTab:Section({Name = "Fog", Side = 1})
+
+    FogSection:Toggle({Name = "Enabled", Flag = "Fog Enabled", Default = Config["World"]["Fog"]["Enabled"], Callback = function(Value)
+        Config["World"]["Fog"]["Enabled"] = Value
+    end}):Colorpicker({Name = "Fog Color", Flag = "Fog Color", Default = Config["World"]["Fog"]["FogColor"], Callback = function(Value)
+        Config["World"]["Fog"]["FogColor"] = Value
+    end})
+
+    FogSection:Slider({Name = "Fog End", Flag = "Fog End", Min = 0, Max = 100000, Default = Config["World"]["Fog"]["FogEnd"], Decimals = 1, Callback = function(Value)
+        Config["World"]["Fog"]["FogEnd"] = Value
+    end})
+
+    FogSection:Slider({Name = "Fog Start", Flag = "Fog Start", Min = 0, Max = 100000, Default = Config["World"]["Fog"]["FogStart"], Decimals = 1, Callback = function(Value)
+        Config["World"]["Fog"]["FogStart"] = Value
+    end})
+
+    local LightingSection = WorldTab:Section({Name = "Lighting", Side = 1})
+
+    LightingSection:Toggle({Name = "Enabled", Flag = "Lighting Enabled", Default = Config["World"]["Lighting"]["Enabled"], Callback = function(Value)
+        Config["World"]["Lighting"]["Enabled"] = Value
+    end})
+
+    LightingSection:Slider({Name = "Clock Time", Flag = "Lighting ClockTime", Min = 0, Max = 24, Default = Config["World"]["Lighting"]["ClockTime"], Decimals = 0.1, Callback = function(Value)
+        Config["World"]["Lighting"]["ClockTime"] = Value
+    end})
+
+    LightingSection:Slider({Name = "Brightness", Flag = "Lighting Brightness", Min = 0, Max = 10, Default = Config["World"]["Lighting"]["Brightness"], Decimals = 0.1, Callback = function(Value)
+        Config["World"]["Lighting"]["Brightness"] = Value
+    end})
+
+    LightingSection:Toggle({Name = "Global Shadows", Flag = "Lighting Shadows", Default = Config["World"]["Lighting"]["GlobalShadows"], Callback = function(Value)
+        Config["World"]["Lighting"]["GlobalShadows"] = Value
+    end})
+
+    LightingSection:Label({Name = "Ambient", Alignment = "Left"}):Colorpicker({Name = "Ambient", Flag = "Lighting Ambient", Default = Config["World"]["Lighting"]["Ambient"], Callback = function(Value)
+        Config["World"]["Lighting"]["Ambient"] = Value
+    end})
+
+    LightingSection:Label({Name = "Outdoor Ambient", Alignment = "Left"}):Colorpicker({Name = "Outdoor Ambient", Flag = "Lighting OutdoorAmbient", Default = Config["World"]["Lighting"]["OutdoorAmbient"], Callback = function(Value)
+        Config["World"]["Lighting"]["OutdoorAmbient"] = Value
+    end})
+
+    local CCSection = WorldTab:Section({Name = "Color Correction", Side = 2})
+
+    CCSection:Toggle({Name = "Enabled", Flag = "CC Enabled", Default = Config["World"]["Color Correction"]["Enabled"], Callback = function(Value)
+        Config["World"]["Color Correction"]["Enabled"] = Value
+    end})
+
+    CCSection:Toggle({Name = "Saturation", Flag = "CC Sat Enabled", Default = Config["World"]["Color Correction"]["Saturation"]["Enabled"], Callback = function(Value)
+        Config["World"]["Color Correction"]["Saturation"]["Enabled"] = Value
+    end})
+
+    CCSection:Slider({Name = "Saturation Value", Flag = "CC Sat Value", Min = -1, Max = 1, Default = Config["World"]["Color Correction"]["Saturation"]["Value"], Decimals = 0.01, Callback = function(Value)
+        Config["World"]["Color Correction"]["Saturation"]["Value"] = Value
+    end})
+
+    CCSection:Toggle({Name = "Contrast", Flag = "CC Con Enabled", Default = Config["World"]["Color Correction"]["Contrast"]["Enabled"], Callback = function(Value)
+        Config["World"]["Color Correction"]["Contrast"]["Enabled"] = Value
+    end})
+
+    CCSection:Slider({Name = "Contrast Value", Flag = "CC Con Value", Min = -1, Max = 1, Default = Config["World"]["Color Correction"]["Contrast"]["Value"], Decimals = 0.01, Callback = function(Value)
+        Config["World"]["Color Correction"]["Contrast"]["Value"] = Value
+    end})
+
+    CCSection:Toggle({Name = "Brightness", Flag = "CC Bri Enabled", Default = Config["World"]["Color Correction"]["Brightness"]["Enabled"], Callback = function(Value)
+        Config["World"]["Color Correction"]["Brightness"]["Enabled"] = Value
+    end})
+
+    CCSection:Slider({Name = "Brightness Value", Flag = "CC Bri Value", Min = -1, Max = 1, Default = Config["World"]["Color Correction"]["Brightness"]["Value"], Decimals = 0.01, Callback = function(Value)
+        Config["World"]["Color Correction"]["Brightness"]["Value"] = Value
+    end})
+
+    CCSection:Toggle({Name = "Tint Color", Flag = "CC Tint Enabled", Default = Config["World"]["Color Correction"]["TintColor"]["Enabled"], Callback = function(Value)
+        Config["World"]["Color Correction"]["TintColor"]["Enabled"] = Value
+    end}):Colorpicker({Name = "Tint", Flag = "CC Tint Color", Default = Config["World"]["Color Correction"]["TintColor"]["Value"], Callback = function(Value)
+        Config["World"]["Color Correction"]["TintColor"]["Value"] = Value
+    end})
+end
+
+do -- Misc Tab
+
+    local MovementSection = MiscTab:Section({Name = "Movement", Side = 1})
+
+    MovementSection:Toggle({Name = "Speed", Flag = "Speed Enabled", Default = Config["Speed"]["Enabled"], Callback = function(Value)
+        Config["Speed"]["Enabled"] = Value
+    end}):Keybind({Name = "Bind", Flag = "Speed Bind", Default = Enum.KeyCode[Config["General"]["Binds"]["Speed"]], Mode = "Toggle"})
+
+    MovementSection:Slider({Name = "Speed Value", Flag = "Speed Value", Min = 16, Max = 5000, Default = Config["Speed"]["Speed"], Decimals = 1, Callback = function(Value)
+        Config["Speed"]["Speed"] = Value
+    end})
+
+    MovementSection:Divider()
+
+    MovementSection:Toggle({Name = "Spiderman", Flag = "Spider Enabled", Default = Config["Spiderman"]["Enabled"], Callback = function(Value)
+        Config["Spiderman"]["Enabled"] = Value
+    end}):Keybind({Name = "Bind", Flag = "Spider Bind", Default = Enum.KeyCode[Config["General"]["Binds"]["Spiderman"]], Mode = "Toggle"})
+
+    MovementSection:Slider({Name = "Jump Power", Flag = "Spider JumpPower", Min = 10, Max = 500, Default = Config["Spiderman"]["Jump Power"], Decimals = 1, Callback = function(Value)
+        Config["Spiderman"]["Jump Power"] = Value
+    end})
+
+    local OrbitSection = MiscTab:Section({Name = "Orbit", Side = 1})
+
+    OrbitSection:Toggle({Name = "Enabled", Flag = "Orbit Enabled", Default = Config["Misc"]["Orbit"]["Enabled"], Callback = function(Value)
+        Config["Misc"]["Orbit"]["Enabled"] = Value
+    end}):Keybind({Name = "Bind", Flag = "Orbit Bind", Default = Enum.KeyCode[Config["General"]["Binds"]["Orbit"]], Mode = "Toggle"})
+
+    OrbitSection:Toggle({Name = "Dead Check", Flag = "Orbit Dead Check", Default = Config["Misc"]["Orbit"]["Dead Check"], Callback = function(Value)
+        Config["Misc"]["Orbit"]["Dead Check"] = Value
+    end})
+
+    OrbitSection:Slider({Name = "Speed", Flag = "Orbit Speed", Min = 0.1, Max = 10, Default = Config["Misc"]["Orbit"]["Speed"], Decimals = 0.1, Suffix = " rad/s", Callback = function(Value)
+        Config["Misc"]["Orbit"]["Speed"] = Value
+    end})
+
+    OrbitSection:Slider({Name = "Height", Flag = "Orbit Height", Min = 0, Max = 50, Default = Config["Misc"]["Orbit"]["Height"], Decimals = 0.5, Suffix = " studs", Callback = function(Value)
+        Config["Misc"]["Orbit"]["Height"] = Value
+    end})
+
+    OrbitSection:Slider({Name = "Radius", Flag = "Orbit Radius", Min = 1, Max = 50, Default = Config["Misc"]["Orbit"]["Radius"], Decimals = 0.5, Suffix = " studs", Callback = function(Value)
+        Config["Misc"]["Orbit"]["Radius"] = Value
+    end})
+
+    OrbitSection:Dropdown({Name = "Sync With", Flag = "Orbit Sync", Default = Config["Misc"]["Orbit"]["Sync With"], Items = {"None", "Silent Aim", "Camera Lock", "Trigger Bot"}, Callback = function(Value)
+        Config["Misc"]["Orbit"]["Sync With"] = Value
+    end})
+
+    local UtilSection = MiscTab:Section({Name = "Utility", Side = 2})
+
+    UtilSection:Toggle({Name = "Bullet TP", Flag = "BTP Enabled", Default = Config["Misc"]["Bullet TP"]["Enabled"], Callback = function(Value)
+        Config["Misc"]["Bullet TP"]["Enabled"] = Value
+    end}):Keybind({Name = "Bind", Flag = "BTP Bind", Default = Enum.KeyCode[Config["General"]["Binds"]["Bullet TP"]], Mode = "Toggle"})
+
+    UtilSection:Toggle({Name = "View Target on TP", Flag = "BTP View Target", Default = Config["Misc"]["Bullet TP"]["View Target"], Callback = function(Value)
+        Config["Misc"]["Bullet TP"]["View Target"] = Value
+    end})
+
+    UtilSection:Divider()
+
+    UtilSection:Toggle({Name = "Anti Lock", Flag = "AL Enabled", Default = Config["Misc"]["Anti Lock"]["Enabled"], Callback = function(Value)
+        Config["Misc"]["Anti Lock"]["Enabled"] = Value
+    end}):Keybind({Name = "Bind", Flag = "AL Bind", Default = Enum.KeyCode[Config["General"]["Binds"]["Anti Lock"]], Mode = "Toggle"})
+
+    UtilSection:Dropdown({Name = "Anti Lock Mode", Flag = "AL Mode", Default = Config["Misc"]["Anti Lock"]["Mode"], Items = {"Predbreaker", "Sky", "Ground"}, Callback = function(Value)
+        Config["Misc"]["Anti Lock"]["Mode"] = Value
+    end})
+
+    UtilSection:Divider()
+
+    UtilSection:Toggle({Name = "Void Hide", Flag = "VH Enabled", Default = Config["Misc"]["Void Hide"]["Enabled"], Callback = function(Value)
+        Config["Misc"]["Void Hide"]["Enabled"] = Value
+    end}):Keybind({Name = "Bind", Flag = "VH Bind", Default = Enum.KeyCode[Config["General"]["Binds"]["Void Hide"]], Mode = "Toggle"})
+
+    UtilSection:Slider({Name = "Void Depth", Flag = "VH Void Y", Min = -100000, Max = -100, Default = Config["Misc"]["Void Hide"]["Void Y"], Decimals = 100, Callback = function(Value)
+        Config["Misc"]["Void Hide"]["Void Y"] = Value
+    end})
+
+    UtilSection:Divider()
+
+    UtilSection:Toggle({Name = "Headless", Flag = "HL Enabled", Default = Config["Headless"]["Enabled"], Callback = function(Value)
+        Config["Headless"]["Enabled"] = Value
+    end})
+
+    UtilSection:Toggle({Name = "Permanent Headless", Flag = "HL Permanent", Default = Config["Headless"]["Permanent"], Callback = function(Value)
+        Config["Headless"]["Permanent"] = Value
+    end})
+
+    local ChecksSection = MiscTab:Section({Name = "Checks", Side = 2})
+
+    ChecksSection:Toggle({Name = "Visible Only", Flag = "Check Visible", Default = Config["General"]["Checks"]["Visible"], Callback = function(Value)
+        Config["General"]["Checks"]["Visible"] = Value
+    end})
+
+    ChecksSection:Toggle({Name = "Target Knocked", Flag = "Check Knocked", Default = Config["General"]["Checks"]["Knocked"], Callback = function(Value)
+        Config["General"]["Checks"]["Knocked"] = Value
+    end})
+
+    ChecksSection:Toggle({Name = "Respawn Check", Flag = "Check Respawn", Default = Config["General"]["Checks"]["Respawn Check"], Callback = function(Value)
+        Config["General"]["Checks"]["Respawn Check"] = Value
+    end})
+
+    ChecksSection:Toggle({Name = "Crouch Rapid Stop", Flag = "Check Crouch Rapid", Default = Config["General"]["Checks"]["Crouch Rapid"], Callback = function(Value)
+        Config["General"]["Checks"]["Crouch Rapid"] = Value
+    end})
+
+    ChecksSection:Divider()
+
+    ChecksSection:Toggle({Name = "Bot Targeting", Flag = "BT Enabled", Default = Config["Bot Targeting"]["Enabled"], Callback = function(Value)
+        Config["Bot Targeting"]["Enabled"] = Value
+    end})
+
+    ChecksSection:Textbox({Name = "Bot Pattern", Flag = "BT Pattern", Default = Config["Bot Targeting"]["Pattern"], Placeholder = "bot", Callback = function(Value)
+        Config["Bot Targeting"]["Pattern"] = Value
+    end})
+
+    ChecksSection:Divider()
+
+    ChecksSection:Toggle({Name = "Blacklist", Flag = "BL Enabled", Default = Config["Blacklist"]["Enabled"], Callback = function(Value)
+        Config["Blacklist"]["Enabled"] = Value
+    end})
+
+    ChecksSection:Toggle({Name = "Knife Check", Flag = "KC Enabled", Default = Config["Knife Check"]["Enabled"], Callback = function(Value)
+        Config["Knife Check"]["Enabled"] = Value
+    end})
+end
+
+do -- Settings Tab
+    local SettingsSection = SettingsTab:Section({Name = "Settings", Side = 2})
+    local ConfigsSection  = SettingsTab:Section({Name = "Profiles",  Side = 1})
+
+    for Index, Value in Library.Theme do
+        SettingsSection:Label({Name = Index, Alignment = "Left"}):Colorpicker({Name = Index, Default = Value, Flag = "Theme"..Index, Callback = function(Color)
+            Library.Theme[Index] = Color
+            Library:ChangeTheme(Index, Color)
+        end})
     end
-    if parent then inst.Parent = parent end
-    return inst
-end
 
--- Utility: hover color effect
-local function addHover(btn, normalColor, hoverColor, prop)
-    prop = prop or "BackgroundColor3"
-    btn.MouseEnter:Connect(function()
-        tween(btn, {[prop] = hoverColor}, 0.15)
-    end)
-    btn.MouseLeave:Connect(function()
-        tween(btn, {[prop] = normalColor}, 0.2)
-    end)
-end
+    SettingsSection:Label({Name = "Menu Keybind", Alignment = "Left"}):Keybind({Name = "Menu Keybind", Flag = "Menu Keybind", Default = Enum.KeyCode.RightControl, Mode = "Toggle", Callback = function()
+        Library.MenuKeybind = Library.Flags["Menu Keybind"].Key
+    end})
 
--- Utility: corner radius
-local function corner(parent, radius)
-    return make("UICorner", {CornerRadius = UDim.new(0, radius or 6)}, parent)
-end
+    SettingsSection:Toggle({Name = "Watermark", Flag = "Watermark", Default = false, Callback = function(Value)
+        Watermark:SetVisibility(Value)
+    end})
 
-local function stroke(parent, color, thickness)
-    return make("UIStroke", {
-        Color = color or Theme.Border,
-        Thickness = thickness or 1,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-    }, parent)
-end
+    SettingsSection:Toggle({Name = "Keybind List", Flag = "Keybind List", Default = false, Callback = function(Value)
+        KeybindList:SetVisibility(Value)
+    end})
 
+    SettingsSection:Dropdown({Name = "Tweening Style", Flag = "Tweening Style", Default = "Exponential", Items = {"Linear", "Sine", "Quad", "Cubic", "Quart", "Quint", "Exponential", "Circular", "Back", "Elastic", "Bounce"}, Callback = function(Value)
+        Library.Tween.Style = Enum.EasingStyle[Value]
+    end})
 
--- ScreenGui setup
-local function createGui()
-    local existing = LocalPlayer.PlayerGui:FindFirstChild("UILibrary")
-    if existing then existing:Destroy() end
+    SettingsSection:Dropdown({Name = "Tweening Direction", Flag = "Tweening Direction", Default = "Out", Items = {"In", "Out", "InOut"}, Callback = function(Value)
+        Library.Tween.Direction = Enum.EasingDirection[Value]
+    end})
 
-    local gui = make("ScreenGui", {
-        Name = "UILibrary",
-        ResetOnSpawn = false,
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-        DisplayOrder = 999,
-    }, LocalPlayer.PlayerGui)
+    SettingsSection:Slider({Name = "Tweening Time", Flag = "Tweening Time", Min = 0, Max = 5, Default = 0.25, Decimals = 0.01, Callback = function(Value)
+        Library.Tween.Time = Value
+    end})
 
-    return gui
-end
+    SettingsSection:Button({Name = "Unload", Callback = function()
+        Library:Unload()
+    end})
 
--- Dragging logic
-local function makeDraggable(handle, frame)
-    local dragging = false
-    local dragStart, startPos
+    local ConfigName
+    local ConfigSelected
 
-    handle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
-        end
-    end)
+    local ConfigsListbox = ConfigsSection:Listbox({Items = {}, Name = "Configs", Flag = "Configs List", Callback = function(Value)
+        ConfigSelected = Value
+    end})
 
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
+    ConfigsSection:Textbox({Name = "Config Name", Placeholder = ". .", Flag = "Config Name", Callback = function(Value)
+        ConfigName = Value
+    end})
 
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-end
-
-
--- Window constructor
-function Library:CreateWindow(config)
-    config = config or {}
-    local title   = config.Title or "Interface"
-    local width   = config.Width or 520
-    local height  = config.Height or 400
-    local keybind = config.Keybind or Enum.KeyCode.RightShift
-
-    local gui = createGui()
-    local visible = true
-
-    -- Root frame (used for scale animation)
-    local root = make("Frame", {
-        Name = "Root",
-        Size = UDim2.new(0, width, 0, height),
-        Position = UDim2.new(0.5, -width / 2, 0.5, -height / 2),
-        BackgroundTransparency = 1,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-    }, gui)
-
-    -- Main window frame
-    local win = make("Frame", {
-        Name = "Window",
-        Size = UDim2.new(1, 0, 1, 0),
-        Position = UDim2.new(0, 0, 0, 0),
-        BackgroundColor3 = Theme.Background,
-        BorderSizePixel = 0,
-        ClipsDescendants = true,
-    }, root)
-    corner(win, 10)
-    stroke(win, Theme.Border, 1)
-
-    -- Drop shadow
-    local shadow = make("ImageLabel", {
-        Name = "Shadow",
-        Size = UDim2.new(1, 30, 1, 30),
-        Position = UDim2.new(0, -15, 0, -10),
-        BackgroundTransparency = 1,
-        Image = "rbxassetid://6014261993",
-        ImageColor3 = Theme.Shadow,
-        ImageTransparency = 0.5,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(49, 49, 450, 450),
-        ZIndex = -1,
-    }, root)
-
-    -- Accent top bar
-    local accentBar = make("Frame", {
-        Name = "AccentBar",
-        Size = UDim2.new(1, 0, 0, 3),
-        Position = UDim2.new(0, 0, 0, 0),
-        BackgroundColor3 = Theme.Accent,
-        BorderSizePixel = 0,
-        ZIndex = 5,
-    }, win)
-    make("UICorner", {CornerRadius = UDim.new(0, 10)}, accentBar)
-
-    -- Title bar
-    local titleBar = make("Frame", {
-        Name = "TitleBar",
-        Size = UDim2.new(1, 0, 0, 44),
-        Position = UDim2.new(0, 0, 0, 3),
-        BackgroundColor3 = Theme.Background,
-        BorderSizePixel = 0,
-        ZIndex = 4,
-    }, win)
-
-    local titleLabel = make("TextLabel", {
-        Name = "Title",
-        Size = UDim2.new(1, -20, 1, 0),
-        Position = UDim2.new(0, 16, 0, 0),
-        BackgroundTransparency = 1,
-        Text = title,
-        TextColor3 = Theme.Text,
-        TextSize = 15,
-        Font = Enum.Font.GothamBold,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = 5,
-    }, titleBar)
-
-    -- Close button
-    local closeBtn = make("TextButton", {
-        Name = "Close",
-        Size = UDim2.new(0, 28, 0, 28),
-        Position = UDim2.new(1, -38, 0.5, -14),
-        BackgroundColor3 = Theme.SurfaceAlt,
-        Text = "x",
-        TextColor3 = Theme.TextMuted,
-        TextSize = 14,
-        Font = Enum.Font.GothamBold,
-        BorderSizePixel = 0,
-        ZIndex = 6,
-    }, titleBar)
-    corner(closeBtn, 6)
-    addHover(closeBtn, Theme.SurfaceAlt, Color3.fromRGB(180, 60, 60))
-
-    -- Divider under title
-    make("Frame", {
-        Size = UDim2.new(1, -32, 0, 1),
-        Position = UDim2.new(0, 16, 1, -1),
-        BackgroundColor3 = Theme.Divider,
-        BorderSizePixel = 0,
-        ZIndex = 4,
-    }, titleBar)
-
-    makeDraggable(titleBar, root)
-
-    -- Tab bar
-    local tabBar = make("Frame", {
-        Name = "TabBar",
-        Size = UDim2.new(0, 140, 1, -47),
-        Position = UDim2.new(0, 0, 0, 47),
-        BackgroundColor3 = Theme.BackgroundAlt,
-        BorderSizePixel = 0,
-        ZIndex = 3,
-        ClipsDescendants = true,
-    }, win)
-
-    make("UIStroke", {
-        Color = Theme.Border,
-        Thickness = 1,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-    }, tabBar)
-
-    local tabList = make("UIListLayout", {
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 2),
-    }, tabBar)
-
-    make("UIPadding", {
-        PaddingTop = UDim.new(0, 8),
-        PaddingLeft = UDim.new(0, 8),
-        PaddingRight = UDim.new(0, 8),
-    }, tabBar)
-
-    -- Content area
-    local contentArea = make("Frame", {
-        Name = "ContentArea",
-        Size = UDim2.new(1, -148, 1, -55),
-        Position = UDim2.new(0, 148, 0, 55),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ZIndex = 3,
-        ClipsDescendants = true,
-    }, win)
-
-    -- Window object
-    local Window = {}
-    Window._gui = gui
-    Window._root = root
-    Window._win = win
-    Window._tabs = {}
-    Window._activeTab = nil
-    Window._visible = true
-
-    -- Open/close animation
-    local function setVisible(state)
-        visible = state
-        if state then
-            root.Visible = true
-            tween(win, {BackgroundTransparency = 0}, 0.2)
-            tweenSpring(root, {Size = UDim2.new(0, width, 0, height)}, 0.35)
+    ConfigsSection:Button({Name = "Create Config", Callback = function()
+        if not isfile(Library.Folders.Configs .. "/" .. ConfigName .. ".json") then
+            writefile(Library.Folders.Configs .. "/" .. ConfigName .. ".json", Library:GetConfig())
+            Library:RefreshConfigsList(ConfigsListbox)
         else
-            tween(win, {BackgroundTransparency = 1}, 0.2)
-            tween(root, {Size = UDim2.new(0, width * 0.92, 0, height * 0.92)}, 0.25)
-            task.delay(0.25, function()
-                root.Visible = false
-                root.Size = UDim2.new(0, width, 0, height)
-            end)
+            Library:Notification("Config '" .. ConfigName .. ".json' already exists", 3, Color3.fromRGB(255, 0, 0))
         end
-    end
+    end})
 
-    closeBtn.MouseButton1Click:Connect(function()
-        setVisible(false)
-    end)
-
-    UserInputService.InputBegan:Connect(function(input, gpe)
-        if gpe then return end
-        if input.KeyCode == keybind then
-            setVisible(not visible)
+    ConfigsSection:Button({Name = "Load Config", Callback = function()
+        if ConfigSelected then
+            Library:LoadConfig(readfile(Library.Folders.Configs .. "/" .. ConfigSelected))
         end
-    end)
-
-    -- Tab creation
-    function Window:AddTab(tabConfig)
-        tabConfig = tabConfig or {}
-        local tabName = tabConfig.Name or ("Tab " .. #self._tabs + 1)
-
-        -- Tab button
-        local tabBtn = make("TextButton", {
-            Name = "Tab_" .. tabName,
-            Size = UDim2.new(1, 0, 0, 34),
-            BackgroundColor3 = Theme.Surface,
-            Text = "",
-            BorderSizePixel = 0,
-            ZIndex = 4,
-            LayoutOrder = #self._tabs + 1,
-        }, tabBar)
-        corner(tabBtn, 6)
-
-        local tabLabel = make("TextLabel", {
-            Size = UDim2.new(1, -12, 1, 0),
-            Position = UDim2.new(0, 12, 0, 0),
-            BackgroundTransparency = 1,
-            Text = tabName,
-            TextColor3 = Theme.TextMuted,
-            TextSize = 13,
-            Font = Enum.Font.GothamBold,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            ZIndex = 5,
-        }, tabBtn)
-
-        -- Active indicator bar
-        local indicator = make("Frame", {
-            Size = UDim2.new(0, 3, 0.6, 0),
-            Position = UDim2.new(0, 0, 0.2, 0),
-            BackgroundColor3 = Theme.Accent,
-            BorderSizePixel = 0,
-            BackgroundTransparency = 1,
-            ZIndex = 6,
-        }, tabBtn)
-        corner(indicator, 3)
-
-        -- Scroll frame for tab content
-        local scrollFrame = make("ScrollingFrame", {
-            Name = "Content_" .. tabName,
-            Size = UDim2.new(1, 0, 1, 0),
-            Position = UDim2.new(0, 0, 0, 0),
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            ScrollBarThickness = 3,
-            ScrollBarImageColor3 = Theme.Accent,
-            CanvasSize = UDim2.new(0, 0, 0, 0),
-            AutomaticCanvasSize = Enum.AutomaticSize.Y,
-            Visible = false,
-            ZIndex = 3,
-        }, contentArea)
-
-        local contentList = make("UIListLayout", {
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            Padding = UDim.new(0, 6),
-        }, scrollFrame)
-
-        make("UIPadding", {
-            PaddingTop = UDim.new(0, 10),
-            PaddingLeft = UDim.new(0, 10),
-            PaddingRight = UDim.new(0, 14),
-            PaddingBottom = UDim.new(0, 10),
-        }, scrollFrame)
-
-        local Tab = {}
-        Tab._btn = tabBtn
-        Tab._label = tabLabel
-        Tab._indicator = indicator
-        Tab._scroll = scrollFrame
-        Tab._window = self
-        Tab._order = 0
-
-        -- Activate this tab
-        local function activate()
-            -- Deactivate previous
-            if self._activeTab and self._activeTab ~= Tab then
-                local prev = self._activeTab
-                tween(prev._btn, {BackgroundColor3 = Theme.Surface}, 0.2)
-                tween(prev._label, {TextColor3 = Theme.TextMuted}, 0.2)
-                tween(prev._indicator, {BackgroundTransparency = 1}, 0.2)
-                prev._scroll.Visible = false
+        Library:Thread(function()
+            task.wait(0.1)
+            for Index, Value in Library.Theme do
+                Library.Theme[Index] = Library.Flags["Theme"..Index].Color
+                Library:ChangeTheme(Index, Library.Flags["Theme"..Index].Color)
             end
-            self._activeTab = Tab
-            tween(tabBtn, {BackgroundColor3 = Theme.SurfaceAlt}, 0.2)
-            tween(tabLabel, {TextColor3 = Theme.Text}, 0.2)
-            tween(indicator, {BackgroundTransparency = 0}, 0.2)
-            scrollFrame.Visible = true
-        end
-
-        tabBtn.MouseButton1Click:Connect(activate)
-        addHover(tabBtn, Theme.Surface, Theme.SurfaceAlt)
-
-        table.insert(self._tabs, Tab)
-
-        if #self._tabs == 1 then
-            activate()
-        end
-
-        -- Section
-        function Tab:AddSection(sectionConfig)
-            sectionConfig = sectionConfig or {}
-            local sectionName = sectionConfig.Name or "Section"
-
-            local sectionFrame = make("Frame", {
-                Name = "Section_" .. sectionName,
-                Size = UDim2.new(1, 0, 0, 28),
-                BackgroundTransparency = 1,
-                BorderSizePixel = 0,
-                ZIndex = 4,
-                LayoutOrder = self._order,
-                AutomaticSize = Enum.AutomaticSize.Y,
-            }, scrollFrame)
-            self._order = self._order + 1
-
-            local sectionLabel = make("TextLabel", {
-                Size = UDim2.new(1, -8, 0, 18),
-                Position = UDim2.new(0, 0, 0, 4),
-                BackgroundTransparency = 1,
-                Text = string.upper(sectionName),
-                TextColor3 = Theme.Accent,
-                TextSize = 10,
-                Font = Enum.Font.GothamBold,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                LetterSpacing = 2,
-                ZIndex = 5,
-            }, sectionFrame)
-
-            local divLine = make("Frame", {
-                Size = UDim2.new(1, 0, 0, 1),
-                Position = UDim2.new(0, 0, 0, 24),
-                BackgroundColor3 = Theme.Divider,
-                BorderSizePixel = 0,
-                ZIndex = 4,
-            }, sectionFrame)
-
-            return sectionFrame
-        end
-
-        -- Button
-        function Tab:AddButton(btnConfig)
-            btnConfig = btnConfig or {}
-            local label   = btnConfig.Name or "Button"
-            local desc    = btnConfig.Description or ""
-            local callback = btnConfig.Callback or function() end
-
-            local frame = make("Frame", {
-                Name = "Button_" .. label,
-                Size = UDim2.new(1, 0, 0, 44),
-                BackgroundColor3 = Theme.ButtonBase,
-                BorderSizePixel = 0,
-                ZIndex = 4,
-                LayoutOrder = self._order,
-            }, scrollFrame)
-            self._order = self._order + 1
-            corner(frame, 7)
-            stroke(frame, Theme.Border, 1)
-
-            local btn = make("TextButton", {
-                Size = UDim2.new(1, 0, 1, 0),
-                BackgroundTransparency = 1,
-                Text = "",
-                ZIndex = 5,
-            }, frame)
-
-            make("TextLabel", {
-                Size = UDim2.new(1, -16, 0, 20),
-                Position = UDim2.new(0, 14, 0, 6),
-                BackgroundTransparency = 1,
-                Text = label,
-                TextColor3 = Theme.Text,
-                TextSize = 13,
-                Font = Enum.Font.GothamBold,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                ZIndex = 6,
-            }, frame)
-
-            if desc ~= "" then
-                make("TextLabel", {
-                    Size = UDim2.new(1, -16, 0, 14),
-                    Position = UDim2.new(0, 14, 0, 26),
-                    BackgroundTransparency = 1,
-                    Text = desc,
-                    TextColor3 = Theme.TextMuted,
-                    TextSize = 11,
-                    Font = Enum.Font.Gotham,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    ZIndex = 6,
-                }, frame)
-            end
-
-            addHover(frame, Theme.ButtonBase, Theme.ButtonHover)
-
-            btn.MouseButton1Down:Connect(function()
-                tween(frame, {BackgroundColor3 = Theme.ButtonPress}, 0.08)
-            end)
-            btn.MouseButton1Up:Connect(function()
-                tween(frame, {BackgroundColor3 = Theme.ButtonHover}, 0.15)
-                task.spawn(callback)
-            end)
-
-            return frame
-        end
-
-        -- Toggle
-        function Tab:AddToggle(toggleConfig)
-            toggleConfig = toggleConfig or {}
-            local label    = toggleConfig.Name or "Toggle"
-            local desc     = toggleConfig.Description or ""
-            local default  = toggleConfig.Default or false
-            local callback = toggleConfig.Callback or function() end
-
-            local state = default
-
-            local frame = make("Frame", {
-                Name = "Toggle_" .. label,
-                Size = UDim2.new(1, 0, 0, 44),
-                BackgroundColor3 = Theme.Surface,
-                BorderSizePixel = 0,
-                ZIndex = 4,
-                LayoutOrder = self._order,
-            }, scrollFrame)
-            self._order = self._order + 1
-            corner(frame, 7)
-            stroke(frame, Theme.Border, 1)
-
-            make("TextLabel", {
-                Size = UDim2.new(1, -70, 0, 20),
-                Position = UDim2.new(0, 14, 0, 6),
-                BackgroundTransparency = 1,
-                Text = label,
-                TextColor3 = Theme.Text,
-                TextSize = 13,
-                Font = Enum.Font.GothamBold,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                ZIndex = 5,
-            }, frame)
-
-            if desc ~= "" then
-                make("TextLabel", {
-                    Size = UDim2.new(1, -70, 0, 14),
-                    Position = UDim2.new(0, 14, 0, 26),
-                    BackgroundTransparency = 1,
-                    Text = desc,
-                    TextColor3 = Theme.TextMuted,
-                    TextSize = 11,
-                    Font = Enum.Font.Gotham,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    ZIndex = 5,
-                }, frame)
-            end
-
-            -- Toggle track
-            local track = make("Frame", {
-                Size = UDim2.new(0, 42, 0, 22),
-                Position = UDim2.new(1, -56, 0.5, -11),
-                BackgroundColor3 = state and Theme.ToggleOn or Theme.ToggleOff,
-                BorderSizePixel = 0,
-                ZIndex = 5,
-            }, frame)
-            corner(track, 11)
-
-            -- Toggle knob
-            local knob = make("Frame", {
-                Size = UDim2.new(0, 16, 0, 16),
-                Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
-                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-                BorderSizePixel = 0,
-                ZIndex = 6,
-            }, track)
-            corner(knob, 8)
-
-            local btn = make("TextButton", {
-                Size = UDim2.new(1, 0, 1, 0),
-                BackgroundTransparency = 1,
-                Text = "",
-                ZIndex = 7,
-            }, frame)
-
-            addHover(frame, Theme.Surface, Theme.SurfaceAlt)
-
-            local function updateToggle(newState)
-                state = newState
-                tween(track, {BackgroundColor3 = state and Theme.ToggleOn or Theme.ToggleOff}, 0.2)
-                tween(knob, {
-                    Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-                }, 0.2, Enum.EasingStyle.Quart)
-                task.spawn(callback, state)
-            end
-
-            btn.MouseButton1Click:Connect(function()
-                updateToggle(not state)
-            end)
-
-            local Toggle = {}
-            function Toggle:Set(val)
-                updateToggle(val)
-            end
-            function Toggle:Get()
-                return state
-            end
-
-            return Toggle
-        end
-
-        -- Slider
-        function Tab:AddSlider(sliderConfig)
-            sliderConfig = sliderConfig or {}
-            local label    = sliderConfig.Name or "Slider"
-            local desc     = sliderConfig.Description or ""
-            local min      = sliderConfig.Min or 0
-            local max      = sliderConfig.Max or 100
-            local default  = sliderConfig.Default or min
-            local suffix   = sliderConfig.Suffix or ""
-            local callback = sliderConfig.Callback or function() end
-
-            local value = math.clamp(default, min, max)
-
-            local frame = make("Frame", {
-                Name = "Slider_" .. label,
-                Size = UDim2.new(1, 0, 0, 56),
-                BackgroundColor3 = Theme.Surface,
-                BorderSizePixel = 0,
-                ZIndex = 4,
-                LayoutOrder = self._order,
-            }, scrollFrame)
-            self._order = self._order + 1
-            corner(frame, 7)
-            stroke(frame, Theme.Border, 1)
-
-            local topRow = make("Frame", {
-                Size = UDim2.new(1, 0, 0, 28),
-                BackgroundTransparency = 1,
-                ZIndex = 5,
-            }, frame)
-
-            make("TextLabel", {
-                Size = UDim2.new(1, -80, 1, 0),
-                Position = UDim2.new(0, 14, 0, 0),
-                BackgroundTransparency = 1,
-                Text = label,
-                TextColor3 = Theme.Text,
-                TextSize = 13,
-                Font = Enum.Font.GothamBold,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                ZIndex = 6,
-            }, topRow)
-
-            local valueLabel = make("TextLabel", {
-                Size = UDim2.new(0, 70, 1, 0),
-                Position = UDim2.new(1, -80, 0, 0),
-                BackgroundTransparency = 1,
-                Text = tostring(value) .. suffix,
-                TextColor3 = Theme.Accent,
-                TextSize = 13,
-                Font = Enum.Font.GothamBold,
-                TextXAlignment = Enum.TextXAlignment.Right,
-                ZIndex = 6,
-            }, topRow)
-
-            -- Track
-            local track = make("Frame", {
-                Size = UDim2.new(1, -28, 0, 6),
-                Position = UDim2.new(0, 14, 0, 38),
-                BackgroundColor3 = Theme.SliderTrack,
-                BorderSizePixel = 0,
-                ZIndex = 5,
-                ClipsDescendants = true,
-            }, frame)
-            corner(track, 3)
-
-            -- Fill
-            local fill = make("Frame", {
-                Size = UDim2.new((value - min) / (max - min), 0, 1, 0),
-                BackgroundColor3 = Theme.SliderFill,
-                BorderSizePixel = 0,
-                ZIndex = 6,
-            }, track)
-            corner(fill, 3)
-
-            -- Knob
-            local knob = make("Frame", {
-                Size = UDim2.new(0, 14, 0, 14),
-                Position = UDim2.new((value - min) / (max - min), -7, 0.5, -7),
-                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-                BorderSizePixel = 0,
-                ZIndex = 7,
-            }, track)
-            corner(knob, 7)
-            make("UIStroke", {Color = Theme.Accent, Thickness = 2}, knob)
-
-            local dragging = false
-
-            local function updateSlider(inputX)
-                local trackPos = track.AbsolutePosition.X
-                local trackSize = track.AbsoluteSize.X
-                local rel = math.clamp((inputX - trackPos) / trackSize, 0, 1)
-                local newVal = math.floor(min + rel * (max - min) + 0.5)
-                value = newVal
-                local pct = (value - min) / (max - min)
-                tween(fill, {Size = UDim2.new(pct, 0, 1, 0)}, 0.08)
-                tween(knob, {Position = UDim2.new(pct, -7, 0.5, -7)}, 0.08)
-                valueLabel.Text = tostring(value) .. suffix
-                task.spawn(callback, value)
-            end
-
-            local sliderBtn = make("TextButton", {
-                Size = UDim2.new(1, 0, 0, 24),
-                Position = UDim2.new(0, 0, 0, 28),
-                BackgroundTransparency = 1,
-                Text = "",
-                ZIndex = 8,
-            }, frame)
-
-            sliderBtn.MouseButton1Down:Connect(function()
-                dragging = true
-                updateSlider(Mouse.X)
-            end)
-
-            UserInputService.InputChanged:Connect(function(input)
-                if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                    updateSlider(Mouse.X)
-                end
-            end)
-
-            UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    dragging = false
-                end
-            end)
-
-            addHover(frame, Theme.Surface, Theme.SurfaceAlt)
-
-            local Slider = {}
-            function Slider:Set(val)
-                value = math.clamp(val, min, max)
-                local pct = (value - min) / (max - min)
-                tween(fill, {Size = UDim2.new(pct, 0, 1, 0)}, 0.15)
-                tween(knob, {Position = UDim2.new(pct, -7, 0.5, -7)}, 0.15)
-                valueLabel.Text = tostring(value) .. suffix
-            end
-            function Slider:Get()
-                return value
-            end
-
-            return Slider
-        end
-
-        -- Label
-        function Tab:AddLabel(labelConfig)
-            labelConfig = labelConfig or {}
-            local text = labelConfig.Text or ""
-
-            local frame = make("Frame", {
-                Name = "Label",
-                Size = UDim2.new(1, 0, 0, 30),
-                BackgroundTransparency = 1,
-                BorderSizePixel = 0,
-                ZIndex = 4,
-                LayoutOrder = self._order,
-            }, scrollFrame)
-            self._order = self._order + 1
-
-            local lbl = make("TextLabel", {
-                Size = UDim2.new(1, -14, 1, 0),
-                Position = UDim2.new(0, 14, 0, 0),
-                BackgroundTransparency = 1,
-                Text = text,
-                TextColor3 = Theme.TextMuted,
-                TextSize = 12,
-                Font = Enum.Font.Gotham,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                ZIndex = 5,
-            }, frame)
-
-            local Label = {}
-            function Label:Set(t)
-                lbl.Text = t
-            end
-            return Label
-        end
-
-        return Tab
-    end
-
-    -- Notify
-    function Window:Notify(notifConfig)
-        notifConfig = notifConfig or {}
-        local title   = notifConfig.Title or "Notice"
-        local message = notifConfig.Message or ""
-        local duration = notifConfig.Duration or 3
-
-        local notifHolder = gui:FindFirstChild("NotifHolder")
-        if not notifHolder then
-            notifHolder = make("Frame", {
-                Name = "NotifHolder",
-                Size = UDim2.new(0, 280, 1, 0),
-                Position = UDim2.new(1, -296, 0, 0),
-                BackgroundTransparency = 1,
-                ZIndex = 100,
-            }, gui)
-            make("UIListLayout", {
-                SortOrder = Enum.SortOrder.LayoutOrder,
-                VerticalAlignment = Enum.VerticalAlignment.Bottom,
-                Padding = UDim.new(0, 8),
-            }, notifHolder)
-            make("UIPadding", {PaddingBottom = UDim.new(0, 16)}, notifHolder)
-        end
-
-        local card = make("Frame", {
-            Name = "Notif",
-            Size = UDim2.new(1, 0, 0, 0),
-            BackgroundColor3 = Theme.Surface,
-            BorderSizePixel = 0,
-            ZIndex = 101,
-            AutomaticSize = Enum.AutomaticSize.Y,
-            BackgroundTransparency = 1,
-        }, notifHolder)
-        corner(card, 8)
-        stroke(card, Theme.Border, 1)
-
-        make("Frame", {
-            Size = UDim2.new(0, 3, 1, 0),
-            BackgroundColor3 = Theme.Accent,
-            BorderSizePixel = 0,
-            ZIndex = 102,
-        }, card)
-
-        local inner = make("Frame", {
-            Size = UDim2.new(1, -12, 0, 0),
-            Position = UDim2.new(0, 10, 0, 0),
-            BackgroundTransparency = 1,
-            AutomaticSize = Enum.AutomaticSize.Y,
-            ZIndex = 102,
-        }, card)
-
-        make("UIPadding", {
-            PaddingTop = UDim.new(0, 10),
-            PaddingBottom = UDim.new(0, 10),
-        }, inner)
-
-        make("UIListLayout", {
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            Padding = UDim.new(0, 3),
-        }, inner)
-
-        make("TextLabel", {
-            Size = UDim2.new(1, 0, 0, 16),
-            BackgroundTransparency = 1,
-            Text = title,
-            TextColor3 = Theme.Text,
-            TextSize = 13,
-            Font = Enum.Font.GothamBold,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            ZIndex = 103,
-            LayoutOrder = 1,
-        }, inner)
-
-        make("TextLabel", {
-            Size = UDim2.new(1, 0, 0, 14),
-            BackgroundTransparency = 1,
-            Text = message,
-            TextColor3 = Theme.TextMuted,
-            TextSize = 11,
-            Font = Enum.Font.Gotham,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            ZIndex = 103,
-            LayoutOrder = 2,
-            TextWrapped = true,
-        }, inner)
-
-        tween(card, {BackgroundTransparency = 0}, 0.2)
-
-        task.delay(duration, function()
-            tween(card, {BackgroundTransparency = 1}, 0.3)
-            task.delay(0.35, function()
-                card:Destroy()
-            end)
         end)
-    end
+    end})
 
-    return Window
+    ConfigsSection:Button({Name = "Delete Config", Callback = function()
+        if ConfigSelected then
+            Library:DeleteConfig(ConfigSelected)
+            Library:RefreshConfigsList(ConfigsListbox)
+        end
+    end})
+
+    ConfigsSection:Button({Name = "Save Config", Callback = function()
+        if ConfigSelected then
+            Library:SaveConfig(ConfigSelected)
+        end
+    end})
+
+    ConfigsSection:Button({Name = "Refresh Configs", Callback = function()
+        Library:RefreshConfigsList(ConfigsListbox)
+    end})
+
+    Library:RefreshConfigsList(ConfigsListbox)
 end
-
-return Library
