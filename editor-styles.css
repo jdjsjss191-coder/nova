@@ -17,7 +17,7 @@
 
 /* Sidebar */
 .editor-sidebar {
-    width: 280px;
+    width: 220px;
     background: rgba(26, 26, 46, 0.9);
     border: 1px solid rgba(138, 43, 226, 0.3);
     border-radius: 15px;
@@ -200,8 +200,8 @@
     flex: 1;
     display: flex;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 14px;
-    line-height: 1.6;
+    font-size: 16px;
+    line-height: 1.8;
     overflow: auto;
 }
 
@@ -216,11 +216,11 @@
 }
 
 .line-number {
-    height: 22.4px;
+    height: 28.8px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    font-size: 12px;
+    font-size: 14px;
 }
 
 .code-editor {
@@ -235,7 +235,7 @@
 }
 
 .code-line {
-    min-height: 22.4px;
+    min-height: 28.8px;
     display: flex;
     align-items: center;
 }
