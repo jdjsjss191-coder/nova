@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vyron Internal - Lua Editor</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="editor-styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="animated-bg">
+        <div class="wave wave1"></div>
+        <div class="wave wave2"></div>
+        <div class="wave wave3"></div>
+        <div class="planets-container">
+            <div class="planet planet-1">
+                <div class="planet-surface"></div>
+                <div class="planet-atmosphere"></div>
+            </div>
+            <div class="planet planet-2">
+                <div class="planet-surface"></div>
+                <div class="planet-rings"></div>
+            </div>
+            <div class="planet planet-3">
+                <div class="planet-surface"></div>
+                <div class="planet-clouds"></div>
+            </div>
+            <div class="planet planet-4">
+                <div class="planet-surface"></div>
+            </div>
+            <div class="planet planet-5">
+                <div class="planet-surface"></div>
+                <div class="planet-glow"></div>
+            </div>
+        </div>
+        <div class="floating-particles">
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+        </div>
+    </div>
+
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <span class="logo-icon">V</span>
+                <span class="logo-text">Vyron</span>
+            </div>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">HOME</a>
+                <a href="#" class="nav-link active">EDITOR</a>
+                <a href="#" class="nav-link">DASHBOARD</a>
+                <a href="#" class="nav-link">DOCUMENTATION</a>
+            </div>
+            <div class="nav-icons">
+                <span class="nav-icon" onclick="logout()">Logout</span>
+                <span class="nav-icon">Theme</span>
+                <span class="nav-icon">Profile</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="editor-main">
+        <div class="editor-container">
+            <div class="editor-sidebar">
+                <div class="sidebar-header">
+                    <h3>Script Files</h3>
+                    <button class="new-file-btn" onclick="createNewFile()">+</button>
+                </div>
+                <div class="file-list">
+                    <div class="file-item active" onclick="selectFile(this, 'main.lua')">
+                        <span class="file-icon">📄</span>
+                        <span class="file-name">main.lua</span>
+                    </div>
+                    <div class="file-item" onclick="selectFile(this, 'config.lua')">
+                        <span class="file-icon">⚙️</span>
+                        <span class="file-name">config.lua</span>
+                    </div>
+                    <div class="file-item" onclick="selectFile(this, 'utils.lua')">
+                        <span class="file-icon">🔧</span>
+                        <span class="file-name">utils.lua</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="editor-content">
+                <div class="editor-header">
+                    <div class="file-tabs">
+                        <div class="tab active">
+                            <span>main.lua</span>
+                            <button class="tab-close">×</button>
+                        </div>
+                    </div>
+                    <div class="editor-actions">
+                        <button class="action-btn" onclick="runScript()">▶ Run</button>
+                        <button class="action-btn" onclick="saveScript()">💾 Save</button>
+                        <button class="action-btn" onclick="downloadScript()">⬇ Download</button>
+                    </div>
+                </div>
+
+                <div class="code-editor-container">
+                    <div class="line-numbers" id="lineNumbers">
+                        <div class="line-number">1</div>
+                    </div>
+                    <div class="code-editor" id="codeEditor" contenteditable="true" spellcheck="false">
+                        <div class="code-line">
+                            <span class="lua-comment">-- Vyron Internal Lua Script</span>
+                        </div>
+                        <div class="code-line">
+                            <span class="lua-keyword">local</span> <span class="lua-variable">player</span> <span class="lua-operator">=</span> <span class="lua-function">game</span><span class="lua-operator">:</span><span class="lua-method">GetService</span><span class="lua-bracket">(</span><span class="lua-string">"Players"</span><span class="lua-bracket">)</span><span class="lua-operator">.</span><span class="lua-property">LocalPlayer</span>
+                        </div>
+                        <div class="code-line">
+                            <span class="lua-keyword">local</span> <span class="lua-variable">mouse</span> <span class="lua-operator">=</span> <span class="lua-variable">player</span><span class="lua-operator">:</span><span class="lua-method">GetMouse</span><span class="lua-bracket">()</span>
+                        </div>
+                        <div class="code-line"></div>
+                        <div class="code-line">
+                            <span class="lua-keyword">function</span> <span class="lua-function">onKeyPress</span><span class="lua-bracket">(</span><span class="lua-variable">key</span><span class="lua-bracket">)</span>
+                        </div>
+                        <div class="code-line">
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-keyword">if</span> <span class="lua-variable">key</span> <span class="lua-operator">==</span> <span class="lua-string">"e"</span> <span class="lua-keyword">then</span>
+                        </div>
+                        <div class="code-line">
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-function">print</span><span class="lua-bracket">(</span><span class="lua-string">"Vyron Internal Activated!"</span><span class="lua-bracket">)</span>
+                        </div>
+                        <div class="code-line">
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-keyword">end</span>
+                        </div>
+                        <div class="code-line">
+                            <span class="lua-keyword">end</span>
+                        </div>
+                        <div class="code-line"></div>
+                        <div class="code-line">
+                            <span class="lua-variable">mouse</span><span class="lua-operator">.</span><span class="lua-property">KeyDown</span><span class="lua-operator">:</span><span class="lua-method">Connect</span><span class="lua-bracket">(</span><span class="lua-variable">onKeyPress</span><span class="lua-bracket">)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="output-panel">
+                    <div class="output-header">
+                        <h4>Output</h4>
+                        <button class="clear-output" onclick="clearOutput()">Clear</button>
+                    </div>
+                    <div class="output-content" id="outputContent">
+                        <div class="output-line success">✅ Script loaded successfully</div>
+                        <div class="output-line info">ℹ️ Ready for execution</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+    <script src="editor-script.js"></script>
+</body>
+</html>

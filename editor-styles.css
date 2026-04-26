@@ -1,0 +1,411 @@
+/* Editor Specific Styles */
+.editor-main {
+    min-height: 100vh;
+    padding-top: 80px;
+    display: flex;
+    flex-direction: column;
+}
+
+.editor-container {
+    display: flex;
+    height: calc(100vh - 80px);
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+    gap: 20px;
+}
+
+/* Sidebar */
+.editor-sidebar {
+    width: 280px;
+    background: rgba(26, 26, 46, 0.9);
+    border: 1px solid rgba(138, 43, 226, 0.3);
+    border-radius: 15px;
+    backdrop-filter: blur(20px);
+    padding: 20px;
+    box-shadow: 
+        0 15px 35px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(138, 43, 226, 0.2);
+}
+
+.sidebar-header h3 {
+    color: #ffffff;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.new-file-btn {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #8a2be2, #1e90ff);
+    color: white;
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.new-file-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 5px 15px rgba(138, 43, 226, 0.4);
+}
+
+.file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 15px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid transparent;
+}
+
+.file-item:hover {
+    background: rgba(138, 43, 226, 0.1);
+    border-color: rgba(138, 43, 226, 0.3);
+    transform: translateX(5px);
+}
+
+.file-item.active {
+    background: rgba(138, 43, 226, 0.2);
+    border-color: rgba(138, 43, 226, 0.5);
+    box-shadow: 0 5px 15px rgba(138, 43, 226, 0.2);
+}
+
+.file-icon {
+    font-size: 1.1rem;
+}
+
+.file-name {
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+/* Editor Content */
+.editor-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: rgba(26, 26, 46, 0.9);
+    border: 1px solid rgba(138, 43, 226, 0.3);
+    border-radius: 15px;
+    backdrop-filter: blur(20px);
+    overflow: hidden;
+    box-shadow: 
+        0 15px 35px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid rgba(138, 43, 226, 0.2);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.file-tabs {
+    display: flex;
+    gap: 5px;
+}
+
+.tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 15px;
+    background: rgba(138, 43, 226, 0.1);
+    border: 1px solid rgba(138, 43, 226, 0.3);
+    border-radius: 8px 8px 0 0;
+    color: #ffffff;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.tab.active {
+    background: rgba(138, 43, 226, 0.2);
+    border-bottom-color: transparent;
+}
+
+.tab-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    transition: all 0.3s ease;
+}
+
+.tab-close:hover {
+    background: rgba(255, 0, 0, 0.2);
+    color: #ff4444;
+}
+
+.editor-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.action-btn {
+    padding: 8px 15px;
+    background: rgba(138, 43, 226, 0.1);
+    border: 1px solid rgba(138, 43, 226, 0.3);
+    border-radius: 8px;
+    color: #ffffff;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.action-btn:hover {
+    background: rgba(138, 43, 226, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(138, 43, 226, 0.3);
+}
+
+/* Code Editor */
+.code-editor-container {
+    flex: 1;
+    display: flex;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    overflow: auto;
+}
+
+.line-numbers {
+    background: rgba(0, 0, 0, 0.2);
+    color: #666;
+    padding: 20px 15px;
+    text-align: right;
+    user-select: none;
+    border-right: 1px solid rgba(138, 43, 226, 0.2);
+    min-width: 60px;
+}
+
+.line-number {
+    height: 22.4px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    font-size: 12px;
+}
+
+.code-editor {
+    flex: 1;
+    padding: 20px;
+    color: #ffffff;
+    background: transparent;
+    outline: none;
+    overflow-y: auto;
+    white-space: pre;
+    font-family: inherit;
+}
+
+.code-line {
+    min-height: 22.4px;
+    display: flex;
+    align-items: center;
+}
+
+/* Lua Syntax Highlighting */
+.lua-keyword {
+    color: #ff79c6;
+    font-weight: 600;
+}
+
+.lua-function {
+    color: #50fa7b;
+    font-weight: 500;
+}
+
+.lua-method {
+    color: #8be9fd;
+    font-weight: 500;
+}
+
+.lua-variable {
+    color: #f8f8f2;
+}
+
+.lua-property {
+    color: #ffb86c;
+}
+
+.lua-string {
+    color: #f1fa8c;
+}
+
+.lua-comment {
+    color: #6272a4;
+    font-style: italic;
+}
+
+.lua-number {
+    color: #bd93f9;
+}
+
+.lua-operator {
+    color: #ff79c6;
+}
+
+.lua-bracket {
+    color: #f8f8f2;
+    font-weight: bold;
+}
+
+/* Output Panel */
+.output-panel {
+    height: 200px;
+    border-top: 1px solid rgba(138, 43, 226, 0.2);
+    background: rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+}
+
+.output-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    border-bottom: 1px solid rgba(138, 43, 226, 0.2);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.output-header h4 {
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.clear-output {
+    background: none;
+    border: 1px solid rgba(138, 43, 226, 0.3);
+    color: #888;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.clear-output:hover {
+    color: #ffffff;
+    border-color: rgba(138, 43, 226, 0.5);
+}
+
+.output-content {
+    flex: 1;
+    padding: 15px 20px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+}
+
+.output-line {
+    margin-bottom: 5px;
+    padding: 2px 0;
+}
+
+.output-line.success {
+    color: #50fa7b;
+}
+
+.output-line.error {
+    color: #ff5555;
+}
+
+.output-line.info {
+    color: #8be9fd;
+}
+
+.output-line.warning {
+    color: #ffb86c;
+}
+
+/* Active nav link */
+.nav-link.active {
+    color: #8a2be2;
+    position: relative;
+}
+
+.nav-link.active::after {
+    width: 100%;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .editor-container {
+        flex-direction: column;
+        height: auto;
+    }
+    
+    .editor-sidebar {
+        width: 100%;
+        height: auto;
+    }
+    
+    .file-list {
+        flex-direction: row;
+        overflow-x: auto;
+        gap: 10px;
+    }
+    
+    .file-item {
+        min-width: 120px;
+        flex-shrink: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    .editor-header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
+    }
+    
+    .editor-actions {
+        justify-content: center;
+    }
+    
+    .code-editor-container {
+        font-size: 12px;
+    }
+    
+    .line-numbers {
+        min-width: 40px;
+        padding: 20px 10px;
+    }
+}
