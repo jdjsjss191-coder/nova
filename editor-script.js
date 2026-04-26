@@ -47,14 +47,16 @@ function selectFile(element, filename) {
     const tab = document.querySelector('.tab span');
     tab.textContent = filename;
     
-    // Load file content (simulate)
-    loadFileContent(filename);
+    // Try to load saved content first, otherwise load default
+    if (!loadSavedContent(filename)) {
+        loadFileContent(filename);
+    }
 }
 
 function loadFileContent(filename) {
     const editor = document.getElementById('codeEditor');
     
-    // Sample content for different files
+    // Sample content for main.lua only
     const fileContents = {
         'main.lua': `<div class="code-line"><span class="lua-comment">-- Vyron Internal Main Script</span></div>
 <div class="code-line"><span class="lua-keyword">local</span> <span class="lua-variable">player</span> <span class="lua-operator">=</span> <span class="lua-function">game</span><span class="lua-operator">:</span><span class="lua-method">GetService</span><span class="lua-bracket">(</span><span class="lua-string">"Players"</span><span class="lua-bracket">)</span><span class="lua-operator">.</span><span class="lua-property">LocalPlayer</span></div>
@@ -66,30 +68,7 @@ function loadFileContent(filename) {
 <div class="code-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-keyword">end</span></div>
 <div class="code-line"><span class="lua-keyword">end</span></div>
 <div class="code-line"></div>
-<div class="code-line"><span class="lua-variable">mouse</span><span class="lua-operator">.</span><span class="lua-property">KeyDown</span><span class="lua-operator">:</span><span class="lua-method">Connect</span><span class="lua-bracket">(</span><span class="lua-variable">onKeyPress</span><span class="lua-bracket">)</span></div>`,
-        
-        'config.lua': `<div class="code-line"><span class="lua-comment">-- Vyron Internal Configuration</span></div>
-<div class="code-line"><span class="lua-keyword">local</span> <span class="lua-variable">config</span> <span class="lua-operator">=</span> <span class="lua-bracket">{</span></div>
-<div class="code-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-property">enabled</span> <span class="lua-operator">=</span> <span class="lua-keyword">true</span><span class="lua-operator">,</span></div>
-<div class="code-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-property">keybind</span> <span class="lua-operator">=</span> <span class="lua-string">"e"</span><span class="lua-operator">,</span></div>
-<div class="code-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-property">speed</span> <span class="lua-operator">=</span> <span class="lua-number">16</span><span class="lua-operator">,</span></div>
-<div class="code-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-property">jumpPower</span> <span class="lua-operator">=</span> <span class="lua-number">50</span></div>
-<div class="code-line"><span class="lua-bracket">}</span></div>
-<div class="code-line"></div>
-<div class="code-line"><span class="lua-keyword">return</span> <span class="lua-variable">config</span></div>`,
-        
-        'utils.lua': `<div class="code-line"><span class="lua-comment">-- Vyron Internal Utilities</span></div>
-<div class="code-line"><span class="lua-keyword">local</span> <span class="lua-variable">utils</span> <span class="lua-operator">=</span> <span class="lua-bracket">{}</span></div>
-<div class="code-line"></div>
-<div class="code-line"><span class="lua-keyword">function</span> <span class="lua-variable">utils</span><span class="lua-operator">.</span><span class="lua-function">notify</span><span class="lua-bracket">(</span><span class="lua-variable">message</span><span class="lua-bracket">)</span></div>
-<div class="code-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-function">game</span><span class="lua-operator">:</span><span class="lua-method">GetService</span><span class="lua-bracket">(</span><span class="lua-string">"StarterGui"</span><span class="lua-bracket">)</span><span class="lua-operator">:</span><span class="lua-method">SetCore</span><span class="lua-bracket">(</span><span class="lua-string">"SendNotification"</span><span class="lua-operator">,</span> <span class="lua-bracket">{</span></div>
-<div class="code-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-property">Title</span> <span class="lua-operator">=</span> <span class="lua-string">"Vyron Internal"</span><span class="lua-operator">,</span></div>
-<div class="code-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-property">Text</span> <span class="lua-operator">=</span> <span class="lua-variable">message</span><span class="lua-operator">,</span></div>
-<div class="code-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-property">Duration</span> <span class="lua-operator">=</span> <span class="lua-number">3</span></div>
-<div class="code-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="lua-bracket">})</span></div>
-<div class="code-line"><span class="lua-keyword">end</span></div>
-<div class="code-line"></div>
-<div class="code-line"><span class="lua-keyword">return</span> <span class="lua-variable">utils</span></div>`
+<div class="code-line"><span class="lua-variable">mouse</span><span class="lua-operator">.</span><span class="lua-property">KeyDown</span><span class="lua-operator">:</span><span class="lua-method">Connect</span><span class="lua-bracket">(</span><span class="lua-variable">onKeyPress</span><span class="lua-bracket">)</span></div>`
     };
     
     editor.innerHTML = fileContents[filename] || fileContents['main.lua'];
@@ -216,14 +195,25 @@ function runScript() {
 }
 
 function saveScript() {
+    const editor = document.getElementById('codeEditor');
+    const filename = document.querySelector('.tab span').textContent;
     const output = document.getElementById('outputContent');
     const timestamp = new Date().toLocaleTimeString();
     
-    output.innerHTML += `<div class="output-line success">[${timestamp}] 💾 Script saved successfully</div>`;
+    // Get the actual text content from the editor
+    const content = getEditorTextContent();
+    
+    // Save to localStorage
+    const savedScripts = JSON.parse(localStorage.getItem('vyron_scripts') || '{}');
+    savedScripts[filename] = content;
+    localStorage.setItem('vyron_scripts', JSON.stringify(savedScripts));
+    
+    output.innerHTML += `<div class="output-line success">[${timestamp}] 💾 Script "${filename}" saved successfully</div>`;
+    output.innerHTML += `<div class="output-line info">[${timestamp}] Content length: ${content.length} characters</div>`;
     output.scrollTop = output.scrollHeight;
     
     // Show save animation
-    const saveBtn = event.target;
+    const saveBtn = event.target.closest('.action-btn');
     const originalText = saveBtn.innerHTML;
     saveBtn.innerHTML = '✅ Saved';
     saveBtn.style.background = 'rgba(80, 250, 123, 0.2)';
@@ -234,10 +224,50 @@ function saveScript() {
     }, 2000);
 }
 
-function downloadScript() {
+// Helper function to get plain text from editor
+function getEditorTextContent() {
     const editor = document.getElementById('codeEditor');
-    const content = editor.textContent || editor.innerText;
+    let content = '';
+    
+    const lines = editor.querySelectorAll('.code-line');
+    lines.forEach((line, index) => {
+        // Get text content and clean up
+        let lineText = line.textContent || line.innerText || '';
+        // Replace non-breaking spaces with regular spaces
+        lineText = lineText.replace(/\u00A0/g, ' ');
+        content += lineText;
+        if (index < lines.length - 1) {
+            content += '\n';
+        }
+    });
+    
+    return content;
+}
+
+// Load saved content when file is selected
+function loadSavedContent(filename) {
+    const savedScripts = JSON.parse(localStorage.getItem('vyron_scripts') || '{}');
+    if (savedScripts[filename]) {
+        const editor = document.getElementById('codeEditor');
+        const lines = savedScripts[filename].split('\n');
+        
+        editor.innerHTML = '';
+        lines.forEach(line => {
+            const lineDiv = document.createElement('div');
+            lineDiv.className = 'code-line';
+            lineDiv.textContent = line || ' '; // Empty lines need space
+            editor.appendChild(lineDiv);
+        });
+        
+        updateLineNumbers();
+        return true;
+    }
+    return false;
+}
+
+function downloadScript() {
     const filename = document.querySelector('.tab span').textContent;
+    const content = getEditorTextContent();
     
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -251,7 +281,7 @@ function downloadScript() {
     
     const output = document.getElementById('outputContent');
     const timestamp = new Date().toLocaleTimeString();
-    output.innerHTML += `<div class="output-line success">[${timestamp}] ⬇ Downloaded ${filename}</div>`;
+    output.innerHTML += `<div class="output-line success">[${timestamp}] ⬇ Downloaded ${filename} (${content.length} characters)</div>`;
     output.scrollTop = output.scrollHeight;
 }
 
