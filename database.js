@@ -230,9 +230,7 @@ class Database {
     close() {
         this.db.close();
     }
-}
 
-module.exports = Database;
     async redeemKey(keyValue, userId) {
         return new Promise((resolve, reject) => {
             this.db.serialize(() => {
@@ -326,3 +324,6 @@ module.exports = Database;
             });
         });
     }
+}
+
+module.exports = Database;
