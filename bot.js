@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const Database = require('./database');
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 require('dotenv').config();
 
 const client = new Client({
@@ -114,6 +114,8 @@ client.on('interactionCreate', async interaction => {
 
     const { commandName, user, options } = interaction;
 
+    console.log(`Command received: ${commandName} from ${user.username} (${user.id})`);
+
     try {
         switch (commandName) {
             case 'register':
@@ -134,6 +136,8 @@ client.on('interactionCreate', async interaction => {
             case 'deactivatekey':
                 await handleDeactivateKey(interaction);
                 break;
+            default:
+                console.log(`Unknown command: ${commandName}`);
         }
     } catch (error) {
         console.error(`Error handling ${commandName}:`, error);
@@ -144,17 +148,21 @@ client.on('interactionCreate', async interaction => {
             0xFF0000
         );
 
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
-        } else {
-            await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        try {
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
+            } else {
+                await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+            }
+        } catch (replyError) {
+            console.error('Error sending error message:', replyError);
         }
     }
 });
 
 async function handleRegister(interaction) {
-    const username = options.getString('username');
-    const password = options.getString('password');
+    const username = interaction.options.getString('username');
+    const password = interaction.options.getString('password');
     const discordId = interaction.user.id;
 
     // Check if user already exists
