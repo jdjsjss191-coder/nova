@@ -59,8 +59,19 @@ const commands = [
         .setDescription('Generate a new script key (Owner only)')
         .addIntegerOption(option =>
             option.setName('duration')
-                .setDescription('Duration in hours')
+                .setDescription('Duration amount')
                 .setRequired(true))
+        .addStringOption(option =>
+            option.setName('timeunit')
+                .setDescription('Time unit')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Minutes', value: 'minutes' },
+                    { name: 'Hours', value: 'hours' },
+                    { name: 'Days', value: 'days' },
+                    { name: 'Weeks', value: 'weeks' },
+                    { name: 'Months', value: 'months' }
+                ))
         .addIntegerOption(option =>
             option.setName('maxusers')
                 .setDescription('Maximum number of users')
@@ -92,6 +103,18 @@ const commands = [
         .addStringOption(option =>
             option.setName('key')
                 .setDescription('The key to deactivate')
+                .setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('checkdetails')
+        .setDescription('Check your account details'),
+
+    new SlashCommandBuilder()
+        .setName('redeemkey')
+        .setDescription('Redeem a script key')
+        .addStringOption(option =>
+            option.setName('key')
+                .setDescription('The script key to redeem')
                 .setRequired(true))
 ];
 
@@ -135,6 +158,12 @@ client.on('interactionCreate', async interaction => {
                 break;
             case 'deactivatekey':
                 await handleDeactivateKey(interaction);
+                break;
+            case 'checkdetails':
+                await handleCheckDetails(interaction);
+                break;
+            case 'redeemkey':
+                await handleRedeemKey(interaction);
                 break;
             default:
                 console.log(`Unknown command: ${commandName}`);
@@ -219,6 +248,7 @@ async function handleGenScriptKey(interaction) {
     }
 
     const duration = interaction.options.getInteger('duration');
+    const timeUnit = interaction.options.getString('timeunit');
     const maxUsers = interaction.options.getInteger('maxusers');
     const usersString = interaction.options.getString('users');
     const role = interaction.options.getRole('role');
@@ -248,14 +278,37 @@ async function handleGenScriptKey(interaction) {
         scriptKey,
         interaction.user.id,
         duration,
+        timeUnit,
         maxUsers,
         assignedUsers,
         assignedRoles
     );
 
+    // Calculate expiration timestamp
+    let milliseconds;
+    switch (timeUnit) {
+        case 'minutes':
+            milliseconds = duration * 60 * 1000;
+            break;
+        case 'hours':
+            milliseconds = duration * 60 * 60 * 1000;
+            break;
+        case 'days':
+            milliseconds = duration * 24 * 60 * 60 * 1000;
+            break;
+        case 'weeks':
+            milliseconds = duration * 7 * 24 * 60 * 60 * 1000;
+            break;
+        case 'months':
+            milliseconds = duration * 30 * 24 * 60 * 60 * 1000;
+            break;
+        default:
+            milliseconds = duration * 60 * 60 * 1000;
+    }
+
     const embed = createEmbed(
         '🔑 Script Key Generated',
-        `**Key:** \`${scriptKey}\`\n**Duration:** ${duration} hours\n**Max Users:** ${maxUsers}\n**Assigned Users:** ${assignedUsers.length}\n**Expires:** <t:${Math.floor((Date.now() + duration * 60 * 60 * 1000) / 1000)}:F>`,
+        `**Key:** \`${scriptKey}\`\n**Duration:** ${duration} ${timeUnit}\n**Max Users:** ${maxUsers}\n**Assigned Users:** ${assignedUsers.length}\n**Expires:** <t:${Math.floor((Date.now() + milliseconds) / 1000)}:F>`,
         0x00FF00
     );
 
@@ -268,7 +321,7 @@ async function handleGenScriptKey(interaction) {
                 const user = await client.users.fetch(userId);
                 const userEmbed = createEmbed(
                     '🎉 Script Key Assigned',
-                    `You have been assigned a Vyron Internal script key!\n\n**Key:** \`${scriptKey}\`\n**Duration:** ${duration} hours\n**Expires:** <t:${Math.floor((Date.now() + duration * 60 * 60 * 1000) / 1000)}:F>\n\nUse this key to access Vyron Internal systems.`,
+                    `You have been assigned a Vyron Internal script key!\n\n**Key:** \`${scriptKey}\`\n**Duration:** ${duration} ${timeUnit}\n**Expires:** <t:${Math.floor((Date.now() + milliseconds) / 1000)}:F>\n\nUse \`/redeemkey\` to activate this key.`,
                     0x8A2BE2
                 );
                 await user.send({ embeds: [userEmbed] });
@@ -337,8 +390,11 @@ async function handleKeyInfo(interaction) {
     let description = '';
     keys.forEach((key, index) => {
         const expiresAt = Math.floor(new Date(key.expires_at).getTime() / 1000);
+        const redeemedBy = JSON.parse(key.redeemed_by || '[]');
         description += `**${index + 1}.** \`${key.key_value}\`\n`;
         description += `   • Used: ${key.used_count}/${key.max_users}\n`;
+        description += `   • Duration: ${key.duration_amount} ${key.duration_unit}\n`;
+        description += `   • Redeemed by: ${redeemedBy.length} users\n`;
         description += `   • Expires: <t:${expiresAt}:R>\n\n`;
     });
 
@@ -403,3 +459,90 @@ process.on('SIGINT', () => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+async function handleCheckDetails(interaction) {
+    const discordId = interaction.user.id;
+    
+    const user = await db.getUser(discordId);
+    if (!user) {
+        const embed = createEmbed(
+            '❌ Not Registered',
+            'You need to register first using `/register`.',
+            0xFF0000
+        );
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
+    const redeemedKeys = JSON.parse(user.redeemed_keys || '[]');
+    let keyInfo = '';
+    
+    if (redeemedKeys.length > 0) {
+        keyInfo = '\n\n**🔑 Redeemed Keys:**\n';
+        redeemedKeys.forEach((keyData, index) => {
+            const expiresAt = Math.floor(new Date(keyData.expires_at).getTime() / 1000);
+            const redeemedAt = Math.floor(new Date(keyData.redeemed_at).getTime() / 1000);
+            keyInfo += `${index + 1}. \`${keyData.key}\`\n`;
+            keyInfo += `   • Redeemed: <t:${redeemedAt}:R>\n`;
+            keyInfo += `   • Expires: <t:${expiresAt}:R>\n\n`;
+        });
+    } else {
+        keyInfo = '\n\n**🔑 Redeemed Keys:** None';
+    }
+
+    const embed = createEmbed(
+        '👤 Account Details',
+        `**Username:** ${user.username}\n**Discord ID:** ${user.discord_id}\n**Account Created:** <t:${Math.floor(new Date(user.created_at).getTime() / 1000)}:F>\n**HWID Status:** ${user.hwid ? 'Set' : 'Not Set'}${keyInfo}`,
+        0x8A2BE2
+    );
+
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
+async function handleRedeemKey(interaction) {
+    const keyValue = interaction.options.getString('key');
+    const discordId = interaction.user.id;
+    
+    const user = await db.getUser(discordId);
+    if (!user) {
+        const embed = createEmbed(
+            '❌ Not Registered',
+            'You need to register first using `/register`.',
+            0xFF0000
+        );
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
+    try {
+        const key = await db.redeemKey(keyValue, discordId);
+        
+        const expiresAt = Math.floor(new Date(key.expires_at).getTime() / 1000);
+        
+        const embed = createEmbed(
+            '✅ Key Redeemed Successfully',
+            `You have successfully redeemed the script key!\n\n**Key:** \`${keyValue}\`\n**Expires:** <t:${expiresAt}:F>\n**Duration:** ${key.duration_amount} ${key.duration_unit}\n\nYou can now use this key to access Vyron Internal systems.`,
+            0x00FF00
+        );
+        
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        
+    } catch (error) {
+        let errorMessage = 'An error occurred while redeeming the key.';
+        
+        if (error.message === 'Key not found or expired') {
+            errorMessage = 'The key was not found or has expired.';
+        } else if (error.message === 'Key already redeemed by this user') {
+            errorMessage = 'You have already redeemed this key.';
+        } else if (error.message === 'Key usage limit reached') {
+            errorMessage = 'This key has reached its maximum usage limit.';
+        } else if (error.message === 'User not found') {
+            errorMessage = 'Your account was not found. Please register first.';
+        }
+        
+        const embed = createEmbed(
+            '❌ Redemption Failed',
+            errorMessage,
+            0xFF0000
+        );
+        
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+}
