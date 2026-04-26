@@ -669,24 +669,72 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
     submitBtn.innerHTML = '<span>VERIFYING...</span>';
     submitBtn.disabled = true;
     
-    // Simulate authentication (replace with actual auth logic)
+    // Simulate authentication
     setTimeout(() => {
-        // Here you would typically make an API call to verify credentials
-        console.log('Login attempt:', { username, password, scriptKey });
-        
-        // For demo purposes, show success/error
-        if (scriptKey.length > 0) {
-            alert('Access Granted! Welcome to Vyron Internal.');
-            closeLoginModal();
+        // Basic validation (you can make this more sophisticated)
+        if (username.length >= 3 && password.length >= 6 && scriptKey.length >= 10) {
+            // Store login state
+            sessionStorage.setItem('vyron_logged_in', 'true');
+            sessionStorage.setItem('vyron_username', username);
+            sessionStorage.setItem('vyron_script_key', scriptKey);
+            
+            // Success - redirect to editor
+            showLoginSuccess();
+            setTimeout(() => {
+                window.location.href = 'editor.html';
+            }, 1500);
         } else {
-            alert('Invalid credentials. Please check your script key.');
+            // Error - show error message
+            showLoginError();
+            
+            // Restore button
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
         }
-        
-        // Restore button
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
     }, 2000);
 });
+
+function showLoginSuccess() {
+    const form = document.getElementById('loginForm');
+    form.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px;">
+            <div style="font-size: 3rem; color: #50fa7b; margin-bottom: 20px;">✅</div>
+            <h3 style="color: #50fa7b; margin-bottom: 10px;">Access Granted!</h3>
+            <p style="color: #b0b0b0;">Redirecting to Vyron Internal Editor...</p>
+            <div class="loading-bar" style="width: 100%; height: 4px; background: rgba(80, 250, 123, 0.2); border-radius: 2px; margin-top: 20px; overflow: hidden;">
+                <div style="width: 100%; height: 100%; background: #50fa7b; animation: loadingProgress 1.5s ease-out;"></div>
+            </div>
+        </div>
+    `;
+}
+
+function showLoginError() {
+    // Create error message
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'login-error';
+    errorDiv.innerHTML = `
+        <div style="background: rgba(255, 85, 85, 0.1); border: 1px solid rgba(255, 85, 85, 0.3); border-radius: 10px; padding: 15px; margin-bottom: 20px; text-align: center;">
+            <div style="color: #ff5555; font-size: 1.2rem; margin-bottom: 5px;">❌</div>
+            <div style="color: #ff5555; font-weight: 600;">Error: Invalid Details</div>
+            <div style="color: #ffb86c; font-size: 0.9rem; margin-top: 5px;">Please check your username, password, and script key</div>
+        </div>
+    `;
+    
+    // Insert error before form
+    const form = document.getElementById('loginForm');
+    form.parentNode.insertBefore(errorDiv, form);
+    
+    // Remove error after 5 seconds
+    setTimeout(() => {
+        errorDiv.remove();
+    }, 5000);
+    
+    // Shake animation for form
+    form.style.animation = 'shake 0.5s ease-in-out';
+    setTimeout(() => {
+        form.style.animation = '';
+    }, 500);
+}
 
 // Add enter key support for modal
 document.addEventListener('keydown', function(event) {
