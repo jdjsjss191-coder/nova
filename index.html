@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vyron - Advanced Software Solutions</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="animated-bg">
+        <div class="wave wave1"></div>
+        <div class="wave wave2"></div>
+        <div class="wave wave3"></div>
+        <div class="planets-container">
+            <div class="planet planet-1">
+                <div class="planet-surface"></div>
+                <div class="planet-atmosphere"></div>
+            </div>
+            <div class="planet planet-2">
+                <div class="planet-surface"></div>
+                <div class="planet-rings"></div>
+            </div>
+            <div class="planet planet-3">
+                <div class="planet-surface"></div>
+                <div class="planet-clouds"></div>
+            </div>
+            <div class="planet planet-4">
+                <div class="planet-surface"></div>
+            </div>
+            <div class="planet planet-5">
+                <div class="planet-surface"></div>
+                <div class="planet-glow"></div>
+            </div>
+        </div>
+        <div class="floating-particles">
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+        </div>
+    </div>
+
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <span class="logo-icon">V</span>
+                <span class="logo-text">Vyron</span>
+            </div>
+            <div class="nav-links">
+                <a href="#" class="nav-link">SOLUTIONS</a>
+                <a href="#" class="nav-link">DASHBOARD</a>
+                <a href="#" class="nav-link">DOCUMENTATION</a>
+            </div>
+            <div class="nav-icons">
+                <span class="nav-icon">Theme</span>
+                <span class="nav-icon">Alerts</span>
+                <span class="nav-icon">Profile</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="hero-section">
+        <div class="hero-content">
+            <div class="hero-icon">
+                <div class="rotating-icon">V</div>
+            </div>
+            
+            <h1 class="hero-title">
+                Welcome to <span class="gradient-text">Vyron</span><br>
+                <span class="subtitle">Internal</span>
+            </h1>
+            
+            <p class="hero-description">
+                We specialize in top advanced internal solutions for multiple games,
+                where our teams provide top level bypasses to make sure you never get banned.
+                Our expert developers combine cutting-edge techniques with proven security methods
+                to deliver undetectable and reliable internal systems.
+            </p>
+            
+            <div class="hero-buttons">
+                <button class="btn-primary">
+                    <span>EXPLORE SYSTEMS</span>
+                    <div class="btn-glow"></div>
+                </button>
+                <button class="btn-secondary" onclick="openLoginModal()">
+                    <span>Load Internal</span>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeLoginModal()">&times;</span>
+            <div class="login-container">
+                <h2>Access Vyron Internal</h2>
+                <p class="login-subtitle">Enter your credentials to access advanced internal systems</p>
+                
+                <form id="loginForm" class="login-form">
+                    <div class="input-group">
+                        <input type="text" id="username" placeholder="Username" required>
+                        <div class="input-glow"></div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <input type="password" id="password" placeholder="Password" required>
+                        <div class="input-glow"></div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <input type="text" id="scriptKey" placeholder="Script Key" required>
+                        <div class="input-glow"></div>
+                    </div>
+                    
+                    <button type="submit" class="login-btn">
+                        <span>ACCESS SYSTEM</span>
+                        <div class="btn-glow"></div>
+                    </button>
+                </form>
+                
+                <div class="login-footer">
+                    <p>Need access? Contact our Discord bot for registration</p>
+                </div>
+            </div>
+        </div>
+    </div>
