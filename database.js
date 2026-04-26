@@ -16,6 +16,7 @@ class Database {
                 username TEXT NOT NULL,
                 password TEXT NOT NULL,
                 hwid TEXT,
+                redeemed_keys TEXT DEFAULT '[]',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -27,11 +28,13 @@ class Database {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 key_value TEXT UNIQUE NOT NULL,
                 created_by TEXT NOT NULL,
-                duration_hours INTEGER NOT NULL,
+                duration_amount INTEGER NOT NULL,
+                duration_unit TEXT NOT NULL,
                 max_users INTEGER NOT NULL,
                 used_count INTEGER DEFAULT 0,
                 assigned_users TEXT DEFAULT '[]',
                 assigned_roles TEXT DEFAULT '[]',
+                redeemed_by TEXT DEFAULT '[]',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 expires_at DATETIME NOT NULL,
                 is_active BOOLEAN DEFAULT 1
@@ -98,19 +101,42 @@ class Database {
     }
 
     // Script key management
-    async createScriptKey(keyValue, createdBy, durationHours, maxUsers, assignedUsers = [], assignedRoles = []) {
+    async createScriptKey(keyValue, createdBy, durationAmount, durationUnit, maxUsers, assignedUsers = [], assignedRoles = []) {
         return new Promise((resolve, reject) => {
-            const expiresAt = new Date(Date.now() + (durationHours * 60 * 60 * 1000)).toISOString();
+            // Calculate expiration time based on unit
+            let milliseconds;
+            switch (durationUnit) {
+                case 'minutes':
+                    milliseconds = durationAmount * 60 * 1000;
+                    break;
+                case 'hours':
+                    milliseconds = durationAmount * 60 * 60 * 1000;
+                    break;
+                case 'days':
+                    milliseconds = durationAmount * 24 * 60 * 60 * 1000;
+                    break;
+                case 'weeks':
+                    milliseconds = durationAmount * 7 * 24 * 60 * 60 * 1000;
+                    break;
+                case 'months':
+                    milliseconds = durationAmount * 30 * 24 * 60 * 60 * 1000;
+                    break;
+                default:
+                    milliseconds = durationAmount * 60 * 60 * 1000; // Default to hours
+            }
+            
+            const expiresAt = new Date(Date.now() + milliseconds).toISOString();
             
             const stmt = this.db.prepare(`
-                INSERT INTO script_keys (key_value, created_by, duration_hours, max_users, assigned_users, assigned_roles, expires_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO script_keys (key_value, created_by, duration_amount, duration_unit, max_users, assigned_users, assigned_roles, expires_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `);
             
             stmt.run([
                 keyValue, 
                 createdBy, 
-                durationHours, 
+                durationAmount,
+                durationUnit,
                 maxUsers, 
                 JSON.stringify(assignedUsers),
                 JSON.stringify(assignedRoles),
@@ -207,3 +233,96 @@ class Database {
 }
 
 module.exports = Database;
+    async redeemKey(keyValue, userId) {
+        return new Promise((resolve, reject) => {
+            this.db.serialize(() => {
+                this.db.run('BEGIN TRANSACTION');
+                
+                // Get key details
+                this.db.get(
+                    'SELECT * FROM script_keys WHERE key_value = ? AND is_active = 1 AND expires_at > datetime("now")',
+                    [keyValue],
+                    (err, key) => {
+                        if (err) {
+                            this.db.run('ROLLBACK');
+                            reject(err);
+                            return;
+                        }
+                        
+                        if (!key) {
+                            this.db.run('ROLLBACK');
+                            reject(new Error('Key not found or expired'));
+                            return;
+                        }
+                        
+                        const redeemedBy = JSON.parse(key.redeemed_by || '[]');
+                        
+                        if (redeemedBy.includes(userId)) {
+                            this.db.run('ROLLBACK');
+                            reject(new Error('Key already redeemed by this user'));
+                            return;
+                        }
+                        
+                        if (key.used_count >= key.max_users) {
+                            this.db.run('ROLLBACK');
+                            reject(new Error('Key usage limit reached'));
+                            return;
+                        }
+                        
+                        // Update key
+                        redeemedBy.push(userId);
+                        this.db.run(
+                            'UPDATE script_keys SET used_count = used_count + 1, redeemed_by = ? WHERE key_value = ?',
+                            [JSON.stringify(redeemedBy), keyValue],
+                            (err) => {
+                                if (err) {
+                                    this.db.run('ROLLBACK');
+                                    reject(err);
+                                    return;
+                                }
+                            }
+                        );
+                        
+                        // Update user
+                        this.db.get(
+                            'SELECT redeemed_keys FROM users WHERE discord_id = ?',
+                            [userId],
+                            (err, user) => {
+                                if (err) {
+                                    this.db.run('ROLLBACK');
+                                    reject(err);
+                                    return;
+                                }
+                                
+                                if (user) {
+                                    const userKeys = JSON.parse(user.redeemed_keys || '[]');
+                                    userKeys.push({
+                                        key: keyValue,
+                                        redeemed_at: new Date().toISOString(),
+                                        expires_at: key.expires_at
+                                    });
+                                    
+                                    this.db.run(
+                                        'UPDATE users SET redeemed_keys = ? WHERE discord_id = ?',
+                                        [JSON.stringify(userKeys), userId],
+                                        (err) => {
+                                            if (err) {
+                                                this.db.run('ROLLBACK');
+                                                reject(err);
+                                            } else {
+                                                this.db.run('COMMIT');
+                                                resolve(key);
+                                            }
+                                        }
+                                    );
+                                } else {
+                                    this.db.run('ROLLBACK');
+                                    reject(new Error('User not found'));
+                                }
+                            }
+                        );
+                    }
+                );
+            });
+        });
+    }
