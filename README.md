@@ -1,82 +1,175 @@
-# Vyron Internal
+# Vyron Internal Discord Bot
 
-A complete internal system with animated website and Discord bot for user management and key distribution.
+A Discord bot for managing user registration, script key generation, and access control for Vyron Internal systems.
 
-## 🌐 Website Features
+## Features
 
-- **Stunning Animated Design**: Realistic rotating planets, floating particles, and dynamic effects
-- **Login System**: Beautiful modal with username, password, and script key authentication
-- **Responsive Design**: Works perfectly on all devices
-- **Space Theme**: Immersive cosmic background with interactive elements
+- **User Registration**: Users can register with username/password via DMs
+- **Script Key Generation**: Owner can generate time-limited keys for specific users or roles
+- **HWID Management**: Users can reset their hardware ID
+- **Download Links**: Placeholder for future download functionality
+- **Persistent Storage**: All data saved to SQLite database
+- **Owner-Only Commands**: Secure key generation restricted to authorized user
 
-## 🤖 Discord Bot Features
+## Commands
 
-- **User Registration**: Secure account creation with encrypted passwords
-- **Script Key Generation**: Time-limited keys with usage restrictions
-- **Role-Based Distribution**: Automatically assign keys to Discord roles
-- **HWID Management**: Hardware ID tracking and reset functionality
-- **Persistent Database**: SQLite storage that survives restarts
+### User Commands (Available to all users in DMs)
+- `/register <username> <password>` - Register a new account
+- `/resethwid` - Reset your hardware ID
+- `/download` - Get download link (placeholder)
 
-## 🚀 Quick Start
+### Owner Commands (Restricted to owner only)
+- `/genscriptkey <duration> <maxusers> [users] [role]` - Generate script keys
+- `/keyinfo` - View all active script keys
+- `/deactivatekey <key>` - Deactivate a specific key
 
-### Website
-1. Open `index.html` in your browser
-2. Click "Load Internal" to see the login modal
-3. Enter credentials to access the system
+## Setup Instructions
 
-### Discord Bot
-1. Navigate to `discord-bot/` folder
-2. Follow the setup instructions in `discord-bot/README.md`
-3. Deploy to Railway for 24/7 uptime
+### 1. Install Dependencies
+```bash
+cd discord-bot
+npm install
+```
 
-## 📋 Commands
+### 2. Environment Configuration
+Create a `.env` file based on `.env.example`:
+```bash
+cp .env.example .env
+```
 
-### User Commands (DMs only)
-- `/register <username> <password>` - Create account
-- `/resethwid` - Reset hardware ID
-- `/download` - Get download link
+Edit `.env` with your values:
+```
+DISCORD_TOKEN=your_discord_bot_token_here
+OWNER_USER_ID=1481473862775472190
+OWNER_USERNAME=v9pv
+```
 
-### Owner Commands (v9pv only)
-- `/genscriptkey <hours> <maxusers> [users] [role]` - Generate keys
-- `/keyinfo` - View active keys
-- `/deactivatekey <key>` - Deactivate key
+### 3. Discord Bot Setup
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Create a new application
+3. Go to "Bot" section and create a bot
+4. Copy the bot token to your `.env` file
+5. Enable the following bot permissions:
+   - Send Messages
+   - Use Slash Commands
+   - Read Message History
+   - Embed Links
 
-## 🔐 Security
+### 4. Bot Permissions & Intents
+Required intents:
+- Guilds
+- Guild Messages
+- Direct Messages
+- Message Content
 
-- Owner verification by Discord ID: `1481473862775472190`
-- Password hashing with SHA-256
-- Time-limited script keys
-- Usage tracking and limits
-- Secure environment variables
+Required permissions:
+- Send Messages
+- Use Slash Commands
+- Embed Links
 
-## 🛠️ Tech Stack
+### 5. Railway Deployment
 
-- **Frontend**: HTML5, CSS3, JavaScript (Vanilla)
-- **Backend**: Node.js, Discord.js v14
-- **Database**: SQLite3
-- **Deployment**: Railway
-- **Version Control**: Git/GitHub
+#### Option 1: GitHub + Railway
+1. Push this code to GitHub:
+```bash
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M main
+git remote add origin https://github.com/yourusername/vyron-internal-bot.git
+git push -u origin main
+```
 
-## 📦 Deployment
+2. Connect to Railway:
+   - Go to [Railway](https://railway.app)
+   - Create new project
+   - Connect your GitHub repository
+   - Set environment variables in Railway dashboard
+   - Deploy automatically
 
-1. **GitHub**: Push all files to repository
-2. **Railway**: Connect GitHub repo for auto-deployment
-3. **Environment**: Set Discord token and owner ID
-4. **Database**: Automatic SQLite creation
+#### Option 2: Railway CLI
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
 
-## 🎨 Visual Features
+# Login to Railway
+railway login
 
-- Animated gradient backgrounds
-- 3D rotating planets with realistic textures
-- Mouse-following particle effects
-- Glowing UI elements
-- Smooth transitions and hover effects
-- Glass morphism design elements
+# Initialize project
+railway init
 
-## 📞 Support
+# Set environment variables
+railway variables set DISCORD_TOKEN=your_token_here
+railway variables set OWNER_USER_ID=1481473862775472190
+railway variables set OWNER_USERNAME=v9pv
 
-Contact the owner (v9pv) for access or technical support.
+# Deploy
+railway up
+```
 
----
+### 6. Database
+The bot uses SQLite database (`vyron.db`) which will be created automatically on first run. The database includes:
 
-**Vyron Internal** - Advanced systems for advanced users.
+- **users**: User registration data
+- **script_keys**: Generated script keys with expiration and usage limits
+- **key_usage**: Key usage tracking
+
+## Owner Configuration
+
+The bot recognizes the owner by either:
+- Discord User ID: `1481473862775472190`
+- Discord Username: `v9pv`
+
+Only the owner can:
+- Generate script keys
+- View key information
+- Deactivate keys
+
+## Key Generation Features
+
+- **Time-limited keys**: Set expiration in hours
+- **Usage limits**: Limit number of users per key
+- **User targeting**: Assign keys to specific Discord users
+- **Role targeting**: Assign keys to all users with a specific role
+- **Automatic distribution**: Keys are automatically sent via DM to assigned users
+
+## Security Features
+
+- Password hashing using SHA-256
+- Hardware ID (HWID) tracking and reset capability
+- Owner-only command restrictions
+- Ephemeral responses for sensitive data
+- Database persistence across restarts
+
+## File Structure
+```
+discord-bot/
+├── bot.js              # Main bot file
+├── database.js         # Database management
+├── package.json        # Dependencies
+├── .env.example        # Environment template
+├── .env               # Your environment variables (create this)
+├── vyron.db           # SQLite database (auto-created)
+└── README.md          # This file
+```
+
+## Usage Examples
+
+### Register a new user:
+```
+/register username:john123 password:mypassword
+```
+
+### Generate a script key (owner only):
+```
+/genscriptkey duration:24 maxusers:5 role:@VIP
+```
+
+### Reset HWID:
+```
+/resethwid
+```
+
+## Support
+
+For issues or questions, contact the bot owner or check the logs in Railway dashboard.

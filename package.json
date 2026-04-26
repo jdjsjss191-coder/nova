@@ -1,0 +1,22 @@
+{
+  "name": "vyron-internal-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Vyron Internal user management and key generation",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "sqlite3": "^5.1.6",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": ["discord", "bot", "vyron", "internal"],
+  "author": "Vyron Internal",
+  "license": "MIT"
+}
